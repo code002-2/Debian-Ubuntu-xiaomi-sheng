@@ -62,7 +62,7 @@ jobs:
           
           # 执行编译
           # 传递环境变量给编译脚本
-          bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
+          bash sheng-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}" "${{ github.workspace }}"
           
           echo "✅ 内核编译完成"
           echo "📊 编译后ccache统计:"
@@ -113,9 +113,9 @@ jobs:
             --- 
             
             ### 📦 包含包
-            - linux-xiaomi-raphael.deb
-            - firmware-xiaomi-raphael.deb  
-            - alsa-xiaomi-raphael.deb
+            - linux-xiaomi-sheng.deb
+            - firmware-xiaomi-sheng.deb  
+            - alsa-xiaomi-sheng.deb
             - install.7z
           draft: false
           prerelease: false

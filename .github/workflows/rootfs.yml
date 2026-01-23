@@ -52,9 +52,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
-        name: "Ubuntu/Debian for Raphael - ${{ steps.generate_tag.outputs.release_tag }}"
+        name: "Ubuntu/Debian for Sheng - ${{ steps.generate_tag.outputs.release_tag }}"
         body: |
-          🐧 Ubuntu/Debian for Raphael
+          🐧 Ubuntu/Debian for Sheng
           
           --- 
           
@@ -146,7 +146,7 @@ jobs:
         
         # 使用GitHub CLI下载Release文件
         gh release download "kernel-$KERNEL_VER" \
-          --pattern "*-xiaomi-raphael*.deb" \
+          --pattern "*-xiaomi-sheng*.deb" \
           --repo "${{ github.repository }}" \
           --clobber
         
@@ -177,12 +177,12 @@ jobs:
         echo "========================================"
         
         # 赋予执行权限并执行构建脚本
-        chmod +x raphael-rootfs_build.sh
-        sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
+        chmod +x sheng-rootfs_build.sh
+        sudo bash ./sheng-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
         # 检查构建结果 - 查找动态生成的压缩包
         # 查找所有.7z文件
-        7Z_FILES=$(find . -name "*.7z" | grep -v "raphael-rootfs_build.sh" | head -10)
+        7Z_FILES=$(find . -name "*.7z" | grep -v "sheng-rootfs_build.sh" | head -10)
         if [[ -n "$7Z_FILES" ]]; then
           for FILE in $7Z_FILES; do
             FILE_SIZE=$(du -h "$FILE" | cut -f1)

@@ -93,6 +93,12 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Upload boot.img
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot.img
+          path: ${{ github.workspace }}/boot_sheng.img
+
       - name: "🏷️ 创建GitHub Release"
         if: steps.collect_artifacts.outputs.pkg_count > 0 && github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1

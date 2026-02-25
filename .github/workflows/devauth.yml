@@ -2,7 +2,6 @@ name: Build sheng-devauth DEB (ARM)
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -10,23 +9,30 @@ jobs:
     runs-on: ubuntu-24.04-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout packaging repository
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential dpkg-dev
+          sudo apt install -y build-essential dpkg-dev git
+
+      - name: Clone source repository
+        run: |
+          git clone https://github.com/map220v/sheng_devauth.git source
 
       - name: Build binary
-        run: make
+        run: |
+          cd source
+          make
 
       - name: Prepare DEB structure
         run: |
           mkdir -p sheng-devauth/usr/bin
           mkdir -p sheng-devauth/DEBIAN
 
-          chmod 0755 xiaomi_devauth
-          cp xiaomi_devauth sheng-devauth/usr/bin/
+          chmod 0755 source/xiaomi_devauth
+          cp source/xiaomi_devauth sheng-devauth/usr/bin/
 
           printf '%s\n' \
           '#!/bin/sh' \
@@ -58,7 +64,8 @@ jobs:
           chmod 0755 sheng-devauth/DEBIAN/prerm
 
       - name: Build DEB
-        run: dpkg-deb --build sheng-devauth
+        run: |
+          dpkg-deb --build sheng-devauth
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

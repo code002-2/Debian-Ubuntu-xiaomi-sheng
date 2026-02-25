@@ -45,3 +45,4 @@ cd ..
 dpkg-deb --build --root-owner-group linux-xiaomi-sheng
 dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
 dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
+dpkg-deb --build --root-owner-group sheng-devauth

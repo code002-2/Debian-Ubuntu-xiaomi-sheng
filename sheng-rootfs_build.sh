@@ -315,28 +315,28 @@ else
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/libssc*.deb; then
+if chroot rootdir dpkg -i /tmp/libssc_0.3.0-1_arm64.deb; then
     echo "✅ libssc 安装完成"
 else
     echo "❌ libssc 安装失败"
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/iio*.deb; then
+if chroot rootdir dpkg -i /tmp/iio-sensor-proxy_99993.8-6_arm64.deb; then
     echo "✅ iio-sensor-proxy 安装完成"
 else
     echo "❌ iio-sensor-proxy 安装失败"
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/sheng-sensors*.deb; then
+if chroot rootdir dpkg -i /tmp/sheng-sensors_20240917-1_arm64.deb; then
     echo "✅ sheng-sensors 安装完成"
 else
     echo "❌ sheng-sensors 安装失败"
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/fast*.deb; then
+if chroot rootdir dpkg -i /tmp/fastrpc_1.0.2-1_arm64.deb; then
     echo "✅ fastrpc 安装完成"
 else
     echo "❌ fastrpc 安装失败"

@@ -161,12 +161,27 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: "📥 Devauth"
-      id: download_devauth
+    - name: "Download adaptation file"
+      id: download_deb_file
       run: |
         
         # 使用GitHub CLI下载Release文件
         gh release download "sheng_devauth" \
+          --pattern "*.deb" \
+          --repo "${{ github.repository }}" \
+          --clobber
+
+        gh release download "libssc" \
+          --pattern "*.deb" \
+          --repo "${{ github.repository }}" \
+          --clobber
+
+        gh release download "iio_sensor_patched" \
+          --pattern "*.deb" \
+          --repo "${{ github.repository }}" \
+          --clobber
+
+        gh release download "fastrpc v20240917" \
           --pattern "*.deb" \
           --repo "${{ github.repository }}" \
           --clobber

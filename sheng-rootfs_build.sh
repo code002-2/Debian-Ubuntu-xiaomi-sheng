@@ -66,7 +66,7 @@ found_packages=0
 missing_packages=""
 
 # 检查每个包文件（使用通配符匹配）
-for pkg in linux-xiaomi-sheng firmware-xiaomi-sheng alsa-xiaomi-sheng sheng-devauth.deb; do
+for pkg in linux-xiaomi-sheng firmware-xiaomi-sheng alsa-xiaomi-sheng sheng-devauth fastrpc_1.0.2-1_arm64 sheng-sensors_20240917-1_arm64 iio-sensor-proxy_99993.8-6_arm64 libssc_0.3.0-1_arm64; do
     if ls ${pkg}*.deb 1> /dev/null 2>&1; then
         echo "找到: ${pkg}*.deb"
         found_packages=$((found_packages + 1))
@@ -277,6 +277,11 @@ cp linux-xiaomi-sheng*.deb rootdir/tmp/
 cp firmware-xiaomi-sheng*.deb rootdir/tmp/
 cp alsa-xiaomi-sheng*.deb rootdir/tmp/
 cp sheng-devauth*.deb rootdir/tmp/
+
+cp libssc*.deb rootdir/tmp/
+cp iio*.deb rootdir/tmp/
+cp sheng-sensors*.deb rootdir/tmp/
+cp fast*.deb rootdir/tmp/
 echo "✅ 内核包复制完成"
 
 # Install custom kernel packages
@@ -306,6 +311,34 @@ if chroot rootdir dpkg -i /tmp/sheng-devauth.deb; then
     echo "✅ sheng-devauth 安装完成"
 else
     echo "❌ sheng-devauth 安装失败"
+    exit 1
+fi
+
+if chroot rootdir dpkg -i /tmp/libssc*.deb; then
+    echo "✅ libssc 安装完成"
+else
+    echo "❌ libssc 安装失败"
+    exit 1
+fi
+
+if chroot rootdir dpkg -i /tmp/iio*.deb; then
+    echo "✅ iio-sensor-proxy 安装完成"
+else
+    echo "❌ iio-sensor-proxy 安装失败"
+    exit 1
+fi
+
+if chroot rootdir dpkg -i /tmp/sheng-sensors*.deb; then
+    echo "✅ sheng-sensors 安装完成"
+else
+    echo "❌ sheng-sensors 安装失败"
+    exit 1
+fi
+
+if chroot rootdir dpkg -i /tmp/fast*.deb; then
+    echo "✅ fastrpc 安装完成"
+else
+    echo "❌ fastrpc 安装失败"
     exit 1
 fi
 

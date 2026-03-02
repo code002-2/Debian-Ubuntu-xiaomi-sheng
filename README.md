@@ -8,7 +8,7 @@ All the files here have been contributed by other users, here you will find a gu
 ## Status
 | Category        | Feature            | Status   | Description |
 |-----------------|-------------------|----------|-------------|
-| Core            | Flashing           | Works    | Whether it is possible to flash the device with `pmbootstrap flasher`. |
+| Core            | Flashing           | Works    | — |
 | Core            | USB Networking     | Works    | After connecting the device with USB to your PC, you can connect to it via telnet (initramfs) or SSH (booted system). |
 | Core            | Battery            | Works    | Whether charging and battery level reporting work. |
 | Core            | Screen             | Works    | Whether the display works; ideally with sleep mode and brightness control. |

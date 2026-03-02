@@ -347,7 +347,7 @@ jobs:
     needs: [prepare-release, build-rootfs]
     permissions:
       contents: write
-    if: ${{ !github.event.inputs.skip_release && needs.build-rootfs.result == 'success' }}
+    if: ${{ !github.event.inputs.skip_release }}
     steps:
     - name: "📝 更新Release信息"
       run: |

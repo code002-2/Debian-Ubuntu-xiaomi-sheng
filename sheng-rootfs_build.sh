@@ -66,7 +66,7 @@ found_packages=0
 missing_packages=""
 
 # 检查每个包文件（使用通配符匹配）
-for pkg in linux-xiaomi-sheng firmware-xiaomi-sheng alsa-xiaomi-sheng sheng-devauth fastrpc_1.0.2-1_arm64 sheng-sensors_20240917-1_arm64 iio-sensor-proxy_99993.8-6_arm64 libssc_0.3.0-1_arm64; do
+for pkg in linux-xiaomi-sheng firmware-xiaomi-sheng alsa-xiaomi-sheng sheng-devauth libssc iio-sensor-proxy sheng-sensors fastrpc; do
     if ls ${pkg}*.deb 1> /dev/null 2>&1; then
         echo "找到: ${pkg}*.deb"
         found_packages=$((found_packages + 1))

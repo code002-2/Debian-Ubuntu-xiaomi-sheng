@@ -5,6 +5,32 @@ All the files here have been contributed by other users, here you will find a gu
 
 **IF YOU AREN'T COMFORTABLE MODDING YOUR TABLET OR ITS PARTITION TABLE OR YOU ARE PARANOID OF BRICKING YOUR DEVICE CLICK AWAY NOW!!! YOU HAVE BEEN WARNED, YOU ARE ON YOUR OWN IF YOU BRICK YOUR DEVICE!!! AGAIN! YOU HAVE BEEN WARNED!!!**
 
+## Status
+| Category        | Feature            | Status   | Description |
+|-----------------|-------------------|----------|-------------|
+| Core            | Flashing           | Works    | Whether it is possible to flash the device with `pmbootstrap flasher`. |
+| Core            | USB Networking     | Works    | After connecting the device with USB to your PC, you can connect to it via telnet (initramfs) or SSH (booted system). |
+| Core            | Battery            | Works    | Whether charging and battery level reporting work. |
+| Core            | Screen             | Works    | Whether the display works; ideally with sleep mode and brightness control. |
+| Core            | Touchscreen        | Works    | — |
+| Core            | Keyboard           | Works    | Whether the built-in physical keyboard works. |
+| Core            | Touchpad           | Works    | Whether the built-in touchpad works. |
+| Core            | Stylus             | Broken   | WIP |
+| Multimedia      | 3D Acceleration    | Works    | — |
+| Multimedia      | Audio              | Works    | Audio playback, microphone, headset and buttons. |
+| Multimedia      | Camera             | Works    | — |
+| Multimedia      | Camera Flash       | Works    | — |
+| Connectivity    | WiFi               | Works    | — |
+| Connectivity    | Bluetooth          | Works    | — |
+| Connectivity    | NFC                | Untested | Near Field Communication |
+| Miscellaneous   | FDE                | Broken   | Full disk encryption and unlocking with unl0kr. |
+| Miscellaneous   | USB OTG            | Works    | USB On-The-Go or USB-C Role switching. |
+| Miscellaneous   | HDMI/DP            | Works    | Video and audio output with HDMI or DisplayPort. |
+| Sensors         | Accelerometer      | Works    | Handles automatic screen rotation in many interfaces. |
+| Sensors         | Magnetometer       | Works    | Sensor to measure the Earth's magnetism |
+| Sensors         | Ambient Light      | Works    | Measures the light level; used for automatic screen dimming in many interfaces. |
+| Sensors         | Proximity          | Works    | — |
+| Sensors         | Hall Effect        | Works    | Measures magnetic fields; usually used as a flip cover sensor |
 
 # Installation Guide
 Please follow the guide carefully
@@ -170,3 +196,15 @@ Please follow the guide carefully
 	```
 
 4. If you see a change in the value of each sensor, it means the sensor is working.
+
+
+# Gnome extension recommendations
+
+1. Auto Activities
+2. Maximized by default actually reborn
+3. Maximized Into Empty Workspace
+4. Overview Background
+5. Reorder Workspaces
+6. TouchUp
+
+The extension is used to maximize the use of the touchscreen on the tablet.

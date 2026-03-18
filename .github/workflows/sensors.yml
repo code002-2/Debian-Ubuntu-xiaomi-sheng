@@ -1,7 +1,6 @@
 name: Build sheng-sensors DEB (ARM64)
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:

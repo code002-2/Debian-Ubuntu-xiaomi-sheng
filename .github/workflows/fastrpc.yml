@@ -1,7 +1,6 @@
 name: Build fastrpc DEB (ARM64)
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:

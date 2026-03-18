@@ -1,7 +1,6 @@
 name: Build sheng-devauth DEB (ARM)
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:

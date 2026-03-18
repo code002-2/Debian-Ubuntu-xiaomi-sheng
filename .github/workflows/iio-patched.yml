@@ -10,7 +10,7 @@ jobs:
 
     env:
       PKGNAME: iio-sensor-proxy
-      PKGVERSION: 3.8
+      PKGVERSION: 3.9
       PKGREL: 6
 
     steps:
@@ -77,39 +77,13 @@ jobs:
           wget https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/${PKGVERSION}/iio-sensor-proxy-${PKGVERSION}.tar.gz
           tar -xf iio-sensor-proxy-${PKGVERSION}.tar.gz
 
-      - name: Copy patches
-        run: |
-          mkdir patches
-          # Pastikan semua patch ada di repo kamu
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0001-WIP-iio-sensor-proxy.c-Do-not-exit-based-on-sensor-e.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0001-iio-sensor-proxy-depend-on-libssc.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0002-proximity-support-SSC-proximity-sensor.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0003-light-support-SSC-light-sensor.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0004-accelerometer-support-SSC-accelerometer-sensor.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0005-compass-support-SSC-compass-sensor.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0006-data-add-libssc-udev-rules.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0007-data-iio-sensor-proxy.service.in-add-AF_QIPCRTR.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0008-drv-ssc-implement-set_polling.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0009-tests-integration-test-add-SSC-sensors.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0010-fixup-data-add-libssc-udev-rules.patch
-          wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/master/temp/iio-sensor-proxy/0013-integration-test-add-test-for-sensors-that-report-no.patch
-          cp *.patch patches/ || true
-
-      - name: Apply patches
-        run: |
-          cd iio-sensor-proxy-${PKGVERSION}
-          for p in ../patches/*.patch; do
-            echo "Applying $p"
-            patch -Np1 < "$p"
-          done
-
       - name: Build project
         run: |
           cd iio-sensor-proxy-${PKGVERSION}
           meson setup output \
             --prefix=/usr \
             -Db_lto=true \
-            -Dssc-support=true \
+            -Dssc-support=enabled \
             -Dsystemdsystemunitdir=/usr/lib/systemd/system
 
           meson compile -C output

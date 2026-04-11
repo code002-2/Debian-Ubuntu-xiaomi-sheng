@@ -79,15 +79,7 @@ chroot rootdir apt install -y \
     libmbim-glib4 || true
 
 # Install satu per satu (biar gampang debug kalau gagal)
-chroot rootdir dpkg -i /tmp/linux-xiaomi-sheng*.deb || exit 1
-chroot rootdir dpkg -i /tmp/firmware-xiaomi-sheng*.deb || exit 1
-chroot rootdir dpkg -i /tmp/alsa-xiaomi-sheng*.deb || exit 1
-chroot rootdir dpkg -i /tmp/sheng-devauth*.deb || exit 1
-
-chroot rootdir dpkg -i /tmp/libssc*.deb || exit 1
-chroot rootdir dpkg -i /tmp/iio-sensor-proxy*.deb || exit 1
-chroot rootdir dpkg -i /tmp/sheng-sensors*.deb || exit 1
-chroot rootdir dpkg -i /tmp/fastrpc*.deb || exit 1
+chroot rootdir bash -c "dpkg -i /tmp/*.deb"
 
 echo "✅ All custom .deb installed"
 

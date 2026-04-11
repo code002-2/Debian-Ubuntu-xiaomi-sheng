@@ -151,5 +151,8 @@ rm -rf rootdir
 tune2fs -U $FILESYSTEM_UUID "$ROOTFS_IMG"
 
 echo "✅ DONE: $ROOTFS_IMG"
+echo "🗜️ 压缩 $ROOTFS_IMG..."
+7z a "${ROOTFS_IMG}.7z" "$ROOTFS_IMG"
+echo "✅ 压缩完成: ${ROOTFS_IMG}.7z"
 
 done

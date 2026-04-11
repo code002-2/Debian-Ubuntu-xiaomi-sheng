@@ -79,7 +79,10 @@ chroot rootdir apt install -y \
     libmbim-glib4 || true
 
 # Install satu per satu (biar gampang debug kalau gagal)
-chroot rootdir bash -c "dpkg -i /tmp/*.deb"
+# debug
+ls -lah rootdir/tmp/
+
+chroot rootdir bash -c "apt update && apt install -y /tmp/*.deb" || exit 1
 
 echo "✅ All custom .deb installed"
 

@@ -5,7 +5,7 @@ on:
     inputs:
       kernel_version:
         required: true
-        default: "6.19"
+        default: "7.0"
 
 jobs:
   bundle:

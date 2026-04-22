@@ -23,7 +23,7 @@ jobs:
             e2fsprogs \
             initramfs-tools \
             android-sdk-libsparse-utils \
-            python3 mkbootimg
+            python3 mkbootimg git
 
       # =========================
       # 1. CREATE ROOTFS
@@ -199,6 +199,7 @@ jobs:
           echo "📂 Downloaded files:"
           ls -lah *.deb
           sudo mkdir -p rootfs/tmp/debs
+          sudo rm libssc*deb
           sudo cp *.deb rootfs/tmp/debs/
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -259,9 +260,11 @@ jobs:
 
       - name: Build boot.img
         run: |
-          mkbootimg \
-            --kernel Image.gz-dtb_sheng \
-            --ramdisk initrd.img \
+          git clone https://github.com/LineageOS/android_system_tools_mkbootimg
+          cd android_system_tools_mkbootimg
+          python3 mkbootimg.py \
+            --kernel ../Image.gz-dtb_sheng \
+            --ramdisk ../initrd.img \
             --cmdline "console=ttyMSM0,115200 earlycon loglevel=7 root=/dev/disk/by-partlabel/linux rootwait rw" \
             --base 0x00000000 \
             --pagesize 4096 \
@@ -269,7 +272,7 @@ jobs:
             --ramdisk_offset 0x02000000 \
             --tags_offset 0x01e00000 \
             --header_version 4 \
-            -o boot.img
+            -o ../boot.img
 
       # =========================
       # 6. UPLOAD ARTIFACT

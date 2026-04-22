@@ -5,8 +5,11 @@ on:
     workflows: ["Build Kernel"]   # HARUS sama dengan "name" di build.yml
     types:
       - completed
+
+  workflow_dispatch:
     inputs:
       kernel_version:
+        description: "Kernel version"
         required: true
         default: "7.0"
 
@@ -22,12 +25,11 @@ jobs:
 
     - name: Download all source releases
       run: |
-        KERNEL_VER=${{ github.event.inputs.kernel_version }}
 
         mkdir bundle && cd bundle
 
         echo "⬇️ Download kernel packages"
-        gh release download "kernel-$KERNEL_VER" \
+        gh release download "kernel-7.0" \
           --pattern "*.deb" \
           --repo "${{ github.repository }}" \
           --clobber || true

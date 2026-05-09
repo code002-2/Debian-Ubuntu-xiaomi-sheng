@@ -139,15 +139,17 @@ jobs:
         echo "✅ 工具安装完成"
 
     - name: "📥 Download kernel bundle"
-      run: |
-        KERNEL_VER="${{ needs.prepare-release.outputs.kernel_version }}"
+  run: |
+    KERNEL_VER="${{ needs.prepare-release.outputs.kernel_version }}"
+    echo "⬇️ Download bundle kernel-bundle-$KERNEL_VER"
 
-        echo "⬇️ Download bundle kernel-bundle-$KERNEL_VER"
+    # 改为原仓库地址
+    gh release download "kernel-bundle-$KERNEL_VER" \
+      --pattern "*.deb" \
+      --repo "alghiffaryfa19/Linux-xiaomi-sheng" \  # 这里改！
+      --clobber
+    ...
 
-        gh release download "kernel-bundle-$KERNEL_VER" \
-          --pattern "*.deb" \
-          --repo "${{ github.repository }}" \
-          --clobber
 
         echo "📂 Downloaded files:"
         ls -lah *.deb

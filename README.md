@@ -118,6 +118,10 @@
     fastboot reboot
     ```
 
+    在你进入系统后，需要手动扩容分区
+    请执行sudo resize2fs /dev/sda30
+    因为他的设计分区大小只有8g
+
 # 切换操作系统
 1. 从安卓切换到 Linux
     - 图形界面方法（需要 root）

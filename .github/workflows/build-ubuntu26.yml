@@ -1,4 +1,4 @@
-name: 🐧 Build Ubuntu 24.04 RootFS
+name: 🐧 Build Ubuntu 26.04 RootFS
 
 on:
   workflow_dispatch:
@@ -31,23 +31,23 @@ jobs:
       - name: Generate release tag
         id: tag
         run: |
-          TAG="ubuntu24-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
+          TAG="ubuntu26-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
           echo "release_tag=$TAG" >> $GITHUB_OUTPUT
       - name: Create GitHub Release
         if: ${{ !github.event.inputs.skip_release }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: "Ubuntu 24.04 for Sheng - ${{ steps.tag.outputs.release_tag }}"
+          name: "Ubuntu 26.04 LTS for Sheng - ${{ steps.tag.outputs.release_tag }}"
           body: |
-            🐧 Ubuntu 24.04 (Noble) for Sheng
+            🐧 Ubuntu 26.04 LTS (Resolute) for Sheng
             
             ---
             
             ### 📋 构建信息
             | 项目 | 详情 |
             |------|------|
-            | Ubuntu版本 | 24.04 LTS (Noble) |
+            | Ubuntu版本 | 26.04 LTS (Resolute) |
             | 内核版本 | ${{ github.event.inputs.kernel_version }} |
             | 构建类型 | ${{ github.event.inputs.build_type }} |
             
@@ -57,23 +57,24 @@ jobs:
             
             **服务器版**
             - 用户名: `root`
-            - 密码: `1234`
+            - 密码: `1234` (首次登录请修改)
             
             **桌面版**
             - 用户名: `luser`
             - 密码: `luser`
-            - 桌面: GNOME + GDM3
+            - 自动登录: 已启用
+            - 桌面环境: GNOME Minimal + GDM3
             
             ---
             
             ### 📦 镜像文件
-            构建完成后的文件将出现在下方附件中。
+            构建完成后将出现在下方附件中。
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-server:
-    name: Build Ubuntu 24.04 Server
+    name: Build Ubuntu 26.04 Server
     runs-on: ubuntu-24.04-arm
     needs: prepare-release
     if: |
@@ -93,9 +94,9 @@ jobs:
       - name: Build RootFS (Server)
         id: build
         run: |
-          chmod +x build-ubuntu25-rootfs.sh
-          sudo ./build-ubuntu25-rootfs.sh server ${{ github.event.inputs.kernel_version }}
-          SEVEN_Z_FILE=$(ls ubuntu24_*.7z | head -1)
+          chmod +x build-ubuntu26-rootfs.sh
+          sudo ./build-ubuntu26-rootfs.sh server ${{ github.event.inputs.kernel_version }}
+          SEVEN_Z_FILE=$(ls ubuntu26_*.7z | head -1)
           echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
           echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
       - name: Upload artifact
@@ -114,7 +115,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-desktop:
-    name: Build Ubuntu 24.04 Desktop
+    name: Build Ubuntu 26.04 Desktop
     runs-on: ubuntu-24.04-arm
     needs: prepare-release
     if: |
@@ -134,9 +135,9 @@ jobs:
       - name: Build RootFS (Desktop)
         id: build
         run: |
-          chmod +x build-ubuntu25-rootfs.sh
-          sudo ./build-ubuntu25-rootfs.sh desktop ${{ github.event.inputs.kernel_version }}
-          SEVEN_Z_FILE=$(ls ubuntu24_*.7z | head -1)
+          chmod +x build-ubuntu26-rootfs.sh
+          sudo ./build-ubuntu26-rootfs.sh desktop ${{ github.event.inputs.kernel_version }}
+          SEVEN_Z_FILE=$(ls ubuntu26_*.7z | head -1)
           echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
           echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
       - name: Upload artifact

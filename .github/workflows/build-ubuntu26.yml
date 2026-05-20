@@ -1,4 +1,4 @@
-name: 🐧 Build Ubuntu 26.04 Desktop (GNOME/KDE/Xfce)
+name: 🐧 构建Ubuntu 26.04 Desktop (GNOME/KDE/Xfce)
 
 on:
   workflow_dispatch:

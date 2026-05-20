@@ -28,106 +28,59 @@ echo "=========================================="
 echo "开始构建 Arch Linux RootFS ($VARIANT)"
 echo "=========================================="
 
-# 安装 qemu-user-static 如果缺失
-if ! command -v qemu-aarch64-static &> /dev/null; then
-    apt-get update && apt-get install -y qemu-user-static
-fi
-
+# 清理旧文件
 rm -rf rootdir || true
 
-# 创建空镜像并挂载
+# 创建空白 ext4 镜像并挂载
 truncate -s $IMAGE_SIZE "$ROOTFS_IMG"
 mkfs.ext4 "$ROOTFS_IMG"
 mkdir rootdir
 mount -o loop "$ROOTFS_IMG" rootdir
 
-# 创建基础目录
-mkdir -p rootdir/usr/bin
-mkdir -p rootdir/var/lib/pacman
-mkdir -p rootdir/etc/pacman.d/gnupg
-mkdir -p rootdir/dev
-mkdir -p rootdir/proc
-mkdir -p rootdir/sys
-mkdir -p rootdir/tmp
+# 下载官方 Arch Linux ARM 基础 tarball（arm64）
+BASE_URL="http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+echo "⬇️ 下载基础系统: $BASE_URL"
+wget --progress=dot:giga -O archlinuxarm.tar.gz "$BASE_URL"
+echo "📦 解压到镜像..."
+tar -xzf archlinuxarm.tar.gz -C rootdir
+rm archlinuxarm.tar.gz
 
-# 复制 QEMU 静态二进制
-cp $(which qemu-aarch64-static) rootdir/usr/bin/
-
-# 配置 pacman (使用清华源，避免网络慢)
-cat > rootdir/etc/pacman.conf <<'EOF'
-[options]
-Architecture = aarch64
-SigLevel = Never
-[core]
-Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-[extra]
-Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-[community]
-Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-EOF
-
-# 挂载虚拟文件系统
+# 挂载虚拟文件系统（用于 chroot）
 mount --bind /dev rootdir/dev
 mount -t proc proc rootdir/proc
 mount -t sysfs sys rootdir/sys
 
-# 修复 /dev/random 熵问题 (可能提高速度)
-mount --bind /dev/urandom rootdir/dev/random 2>/dev/null || true
-
-# 在 chroot 内执行引导脚本（使用 timeout 防止卡死）
-cat > rootdir/bootstrap.sh <<'EOF'
-#!/bin/bash
-set -e
-echo ">>> 初始化 pacman 密钥环 (跳过 GPG 以加速)..."
-# 跳过密钥环初始化，直接使用 SigLevel = Never
-mkdir -p /etc/pacman.d/gnupg
-echo ">>> 更新软件包数据库..."
-pacman -Sy --noconfirm
-echo ">>> 安装基础系统..."
-pacman -S --noconfirm --needed base base-devel
-if [ "$1" = "desktop" ]; then
-    echo ">>> 安装桌面环境 (plasma-desktop, sddm)..."
-    pacman -S --noconfirm --needed xorg-server plasma-desktop sddm firefox
-fi
-echo ">>> 启用系统服务..."
-systemctl enable systemd-networkd systemd-resolved
-if [ "$1" = "desktop" ]; then
-    systemctl enable sddm
-else
-    systemctl enable sshd
-fi
+# 配置 pacman 镜像源（清华源加速）
+cat > rootdir/etc/pacman.d/mirrorlist <<'EOF'
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
 EOF
-chmod +x rootdir/bootstrap.sh
 
-# 执行引导脚本，设置 30 分钟超时
-timeout 1800 chroot rootdir /usr/bin/qemu-aarch64-static /bin/bash /bootstrap.sh "$VARIANT"
-if [ $? -eq 124 ]; then
-    echo "错误: 构建超时 (30分钟)"
-    exit 1
-fi
-
-# 创建用户（桌面版）
+# 在 chroot 内安装附加软件包
 if [ "$VARIANT" = "desktop" ]; then
-    cat > rootdir/create_user.sh <<'EOF'
-useradd -m -G wheel -s /bin/bash arch
-echo "arch:arch" | chpasswd
-echo "arch ALL=(ALL) ALL" >> /etc/sudoers
-EOF
-    chmod +x rootdir/create_user.sh
-    chroot rootdir /usr/bin/qemu-aarch64-static /bin/bash /create_user.sh
-    rm -f rootdir/create_user.sh
+    echo "🖥️ 安装桌面环境 (Plasma, SDDM, Firefox)..."
+    chroot rootdir /bin/bash -c "
+        pacman -Sy --noconfirm
+        pacman -S --noconfirm --needed xorg-server plasma-desktop sddm firefox
+        systemctl enable sddm
+        useradd -m -G wheel -s /bin/bash arch
+        echo 'arch:arch' | chpasswd
+        echo 'arch ALL=(ALL) ALL' >> /etc/sudoers
+        echo 'arch-${VARIANT}' > /etc/hostname
+    "
+else
+    echo "⚙️ 安装服务器版基础包 (OpenSSH)..."
+    chroot rootdir /bin/bash -c "
+        pacman -Sy --noconfirm
+        pacman -S --noconfirm --needed openssh
+        systemctl enable sshd
+        echo 'arch-${VARIANT}' > /etc/hostname
+    "
 fi
 
-# 设置主机名
-echo "arch-${VARIANT}" > rootdir/etc/hostname
-
-# 清理
-rm -f rootdir/bootstrap.sh
-rm -f rootdir/usr/bin/qemu-aarch64-static
+# 清理 pacman 缓存
 chroot rootdir pacman -Scc --noconfirm 2>/dev/null || true
 
-# 卸载
-umount rootdir/dev/random 2>/dev/null || true
+# 卸载挂载点
 umount rootdir/dev rootdir/proc rootdir/sys 2>/dev/null || true
 umount rootdir || true
 rm -rf rootdir

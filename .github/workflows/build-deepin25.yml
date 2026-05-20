@@ -1,10 +1,10 @@
-name: 🐧 Build Deepin 25 Desktop (DDE)
+name: 🐧 构建Deepin 25 Desktop (DDE)
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: '内核版本 (如 7.0，用于获取kernel bundle)'
+        description: '内核版本 (如 7.0)'
         required: true
         default: '7.0'
       skip_release:
@@ -41,7 +41,7 @@ jobs:
             |------|------|
             | Deepin版本 | 25 (crimson) |
             | 内核版本 | ${{ github.event.inputs.kernel_version }} |
-            | 桌面环境 | Deepin Desktop Environment (DDE) 7.0 |
+            | 桌面环境 | Deepin Desktop Environment (DDE) |
 
             ---
 

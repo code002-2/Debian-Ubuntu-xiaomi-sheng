@@ -1,4 +1,4 @@
-name: 🎮 Build Freedreno/Turnip GPU Driver (Mesa) as .deb
+name: 构建适用于Debian/Ubuntu的mesa freedreno驱动
 
 on:
   workflow_dispatch:
@@ -83,9 +83,11 @@ jobs:
           mkdir -p debian/usr/lib/aarch64-linux-gnu/
           DESTDIR=$(pwd)/debian ninja -C builddir/ install
           mkdir -p debian/DEBIAN
+          # 构造符合 Debian 规范的版本号：以数字开头，使用 0.0.0+git<commit>
+          DEB_VERSION="0.0.0+git${{ env.MESA_COMMIT }}"
           cat > debian/DEBIAN/control <<EOF
           Package: mesa-freedreno-turnip
-          Version: ${{ github.event.inputs.mesa_version }}-git${{ env.MESA_COMMIT }}
+          Version: ${DEB_VERSION}
           Architecture: arm64
           Maintainer: GitHub Actions <actions@github.com>
           Description: Freedreno (OpenGL) and Turnip (Vulkan) drivers for Qualcomm Adreno GPUs
@@ -95,13 +97,13 @@ jobs:
           cd debian
           find usr -type f -exec md5sum {} \; > DEBIAN/md5sums
           cd ..
-          dpkg-deb --build debian mesa-freedreno-turnip_${{ github.event.inputs.mesa_version }}-git${{ env.MESA_COMMIT }}_arm64.deb
+          dpkg-deb --build debian mesa-freedreno-turnip_${DEB_VERSION}_arm64.deb
 
       - name: Upload .deb as artifact
         uses: actions/upload-artifact@v4
         with:
           name: mesa-freedreno-turnip
-          path: mesa-source/*.deb
+          path: mesa-source/mesa-freedreno-turnip_*.deb
           retention-days: 14
 
       - name: Create Release and upload .deb
@@ -122,7 +124,7 @@ jobs:
             sudo dpkg -i mesa-freedreno-turnip_*.deb
             sudo apt install -f  # 解决依赖
             ```
-          files: mesa-source/*.deb
+          files: mesa-source/mesa-freedreno-turnip_*.deb
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

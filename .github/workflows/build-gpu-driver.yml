@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout repository (for script)
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install build dependencies
@@ -41,7 +41,8 @@ jobs:
             libxxf86vm-dev libxrandr-dev libxfixes-dev libwayland-dev \
             wayland-protocols libxcb-randr0-dev libvulkan-dev \
             libelf-dev libexpat1-dev libzstd-dev \
-            dpkg-dev debhelper fakeroot
+            dpkg-dev debhelper fakeroot \
+            libglvnd-dev glslang-tools
 
       - name: Upgrade meson to >=1.4.0
         run: |

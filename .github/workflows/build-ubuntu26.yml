@@ -1,4 +1,4 @@
-name: 🐧 构建Ubuntu 26.04 RootFS (GNOME/KDE)
+name: 🐧 Build Ubuntu 26.04 Desktop (GNOME/KDE/Xfce)
 
 on:
   workflow_dispatch:
@@ -7,20 +7,13 @@ on:
         description: '内核版本 (如 7.0)'
         required: true
         default: '7.0'
-      build_type:
-        description: '构建类型'
-        type: choice
-        options:
-          - all
-          - server-only
-          - desktop-only
-        default: 'all'
       desktop_environment:
-        description: '桌面环境 (仅当构建 desktop 时生效)'
+        description: '桌面环境'
         type: choice
         options:
           - gnome
           - kde
+          - xfce
         default: 'gnome'
       skip_release:
         description: '跳过创建GitHub Release'
@@ -45,9 +38,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: "Ubuntu 26.04 LTS for Sheng - ${{ steps.tag.outputs.release_tag }}"
+          name: "Ubuntu 26.04 Desktop - ${{ steps.tag.outputs.release_tag }}"
           body: |
-            🐧 Ubuntu 26.04 LTS (Resolute Raccoon) for Sheng
+            🐧 Ubuntu 26.04 LTS (Resolute Raccoon) Desktop
             
             ---
             
@@ -56,20 +49,14 @@ jobs:
             |------|------|
             | Ubuntu版本 | 26.04 LTS (Resolute) |
             | 内核版本 | ${{ github.event.inputs.kernel_version }} |
-            | 构建类型 | ${{ github.event.inputs.build_type }} |
             | 桌面环境 | ${{ github.event.inputs.desktop_environment }} |
             
             ---
             
             ### 🔐 默认凭据
-            **服务器版**
-            - 用户名: `root`
-            - 密码: `1234`
-            
-            **桌面版**
             - 用户名: `luser`
             - 密码: `luser`
-            - 桌面: ${{ github.event.inputs.desktop_environment == 'gnome' && 'GNOME + GDM3' || 'KDE Plasma + SDDM' }}
+            - 桌面: ${{ github.event.inputs.desktop_environment == 'gnome' && 'GNOME + GDM3' || github.event.inputs.desktop_environment == 'kde' && 'KDE Plasma + SDDM' || 'Xfce + LightDM' }}
             
             ---
             
@@ -79,54 +66,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-server:
-    name: Build Ubuntu 26.04 Server
-    runs-on: ubuntu-24.04-arm
-    needs: prepare-release
-    if: |
-      github.event.inputs.build_type == 'all' ||
-      github.event.inputs.build_type == 'server-only'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install build tools
-        run: sudo apt update && sudo apt install -y debootstrap p7zip-full curl
-      - name: Download kernel bundle
-        run: |
-          gh release download "kernel-bundle-${{ github.event.inputs.kernel_version }}" \
-            --pattern "*.deb" --repo "${{ github.repository }}" --clobber
-          ls -la *.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build RootFS (Server)
-        id: build
-        run: |
-          chmod +x build-ubuntu26-rootfs.sh
-          sudo ./build-ubuntu26-rootfs.sh server ${{ github.event.inputs.kernel_version }}
-          SEVEN_Z_FILE=$(ls ubuntu26_server_*.7z | head -1)
-          echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
-          echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.build.outputs.filename }}
-          path: ${{ steps.build.outputs.path }}
-          retention-days: 7
-      - name: Upload to Release
-        if: ${{ !github.event.inputs.skip_release }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.prepare-release.outputs.release_tag }}
-          files: ${{ steps.build.outputs.path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   build-desktop:
     name: Build Ubuntu 26.04 Desktop (${{ github.event.inputs.desktop_environment }})
     runs-on: ubuntu-24.04-arm
     needs: prepare-release
-    if: |
-      github.event.inputs.build_type == 'all' ||
-      github.event.inputs.build_type == 'desktop-only'
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
@@ -138,12 +81,12 @@ jobs:
           ls -la *.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build RootFS (Desktop)
+      - name: Build RootFS
         id: build
         run: |
           chmod +x build-ubuntu26-rootfs.sh
-          sudo ./build-ubuntu26-rootfs.sh desktop ${{ github.event.inputs.kernel_version }} ${{ github.event.inputs.desktop_environment }}
-          SEVEN_Z_FILE=$(ls ubuntu26_desktop_${{ github.event.inputs.desktop_environment }}_*.7z | head -1)
+          sudo ./build-ubuntu26-rootfs.sh ${{ github.event.inputs.kernel_version }} ${{ github.event.inputs.desktop_environment }}
+          SEVEN_Z_FILE=$(ls ubuntu26_${{ github.event.inputs.desktop_environment }}_*.7z | head -1)
           echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
           echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
       - name: Upload artifact

@@ -80,7 +80,25 @@ wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/sheng/device/
 echo "🩹 [1/5] 正在全量扫荡并修复所有驱动中残留的旧版 of_gpio.h 引用..."
 find drivers/ sound/ -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/#include <linux\/of_gpio.h>/#include <linux\/gpio\/consumer.h>/g' {} + 2>/dev/null || true
 
-echo "🚀 [2/5] 执行内核驱动『全模块转内置』硬核手术..."
+echo "📱 [2/5] 正在强行重写触摸屏驱动 (nt36xxx.c)，完全抹除旧版 GPIO 函数..."
+if [ -f drivers/input/touchscreen/nt36532e/nt36xxx.c ]; then
+    # 彻底覆盖包含 "of_get_named_gpio" 的一整行，将其强行转化为 7.1 规范的 fwnode 获取方式
+    sed -i 's/.*of_get_named_gpio.*novatek,irq.*/        ts->irq_gpio = desc_to_gpio(fwnode_gpiod_get_index(of_fwnode_handle(np), "novatek,irq", 0, GPIOD_ASIS, "nt36xxx_irq"));/g' drivers/input/touchscreen/nt36532e/nt36xxx.c
+    sed -i 's/.*of_get_named_gpio.*novatek,reset.*/        ts->reset_gpio = desc_to_gpio(fwnode_gpiod_get_index(of_fwnode_handle(np), "novatek,reset", 0, GPIOD_ASIS, "nt36xxx_reset"));/g' drivers/input/touchscreen/nt36532e/nt36xxx.c
+    
+    # 防御性补充：如果代码中还有直接引用旧 api 的地方，统一做降级拦截
+    sed -i 's/of_get_named_gpio(np, "novatek,irq-gpio", 0)/desc_to_gpio(fwnode_gpiod_get_index(of_fwnode_handle(np), "novatek,irq", 0, GPIOD_ASIS, "nt36xxx_irq"))/g' drivers/input/touchscreen/nt36532e/nt36xxx.c
+    sed -i 's/of_get_named_gpio(np, "novatek,reset-gpio", 0)/desc_to_gpio(fwnode_gpiod_get_index(of_fwnode_handle(np), "novatek,reset", 0, GPIOD_ASIS, "nt36xxx_reset"))/g' drivers/input/touchscreen/nt36532e/nt36xxx.c
+fi
+
+echo "🎨 [3/5] 正在修复高通 GPU (msm_gem.c) 7.1 锁管理和共享判定冲突..."
+if [ -f drivers/gpu/drm/msm/msm_gem.c ]; then
+    sed -i 's/obj->base.resv/obj->resv/g' drivers/gpu/drm/msm/msm_gem.c 2>/dev/null || true
+    sed -i 's/(obj->resv != &obj->_resv)/(!obj->import_attach)/g' drivers/gpu/drm/msm/msm_gem.c 2>/dev/null || true
+    sed -i 's/container_of(obj->resv, struct drm_gem_object, _resv)/obj/g' drivers/gpu/drm/msm/msm_gem.c 2>/dev/null || true
+fi
+
+echo "🚀 [4/5] 执行内核驱动『全模块转内置』硬核手术..."
 sed -i 's/CONFIG_PINCTRL_SM8550=m/CONFIG_PINCTRL_SM8550=y/g' .config
 sed -i 's/CONFIG_SM_GCC_8550=m/CONFIG_SM_GCC_8550=y/g' .config
 sed -i 's/CONFIG_SM_DISPCC_8550=m/CONFIG_SM_DISPCC_8550=y/g' .config
@@ -99,7 +117,7 @@ echo "CONFIG_FONT_8x16=y" >> .config
 echo "CONFIG_LOGO=y" >> .config
 echo "CONFIG_LOGO_LINUX_CLUT224=y" >> .config
 
-# 🚨 B 槽引导特调 CMDLINE：rootwait 延长至无限期等待，强制指定 root 寻址
+# 强制锁死基本参数，配合 A/B 槽独立分区引导
 echo 'CONFIG_CMDLINE="console=ttyMSM0,115200 earlycon=msm_geni_serial,0xaec00000 root=PARTLABEL=linux rootwait fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7 panic=0 pm_poweroff.reset_type=1"' >> .config
 echo "CONFIG_CMDLINE_FORCE=y" >> .config
 
@@ -108,7 +126,7 @@ sed -i 's/CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/g' .config
 echo "CONFIG_DEBUG_INFO_NONE=y" >> .config
 
 # ========================================================
-# 🏷️ [3/5] 核心改名
+# 🏷️ [5/5] 核心改名
 # ========================================================
 echo "🏷️ 正在向内核配置系统注入自定义版本后缀: -xiaomi-pad-6s-pro-game"
 sed -i '/CONFIG_LOCALVERSION/d' .config
@@ -139,66 +157,5 @@ _kernel_version="$(make kernelrelease -s)"
 echo "📦 最终构建出的内核定制版本号为: ${_kernel_version}"
 
 # ========================================================
-# 📦 打包重构：🚨【标准高通 v2 签名格式，专治 A/B 槽不认】
-# ========================================================
-GAME_PKG_NAME="linux-xiaomi-pad-6s-pro-game"
-PKGDIR="../${GAME_PKG_NAME}"
-
-mkdir -p "${PKGDIR}/DEBIAN"
-echo "Package: ${GAME_PKG_NAME}" > "${PKGDIR}/DEBIAN/control"
-echo "Version: ${_kernel_version}" >> "${PKGDIR}/DEBIAN/control"
-echo "Architecture: arm64" >> "${PKGDIR}/DEBIAN/control"
-echo "Maintainer: github-actions" >> "${PKGDIR}/DEBIAN/control"
-echo "Description: Upstream 7.1 Linux kernel aligned for Slot B booting" >> "${PKGDIR}/DEBIAN/control"
-
-ARCH=arm64
-mkdir -p $PKGDIR/boot
-
-if [ -f arch/$ARCH/boot/Image.gz ]; then
-    install -Dm644 arch/$ARCH/boot/Image.gz $PKGDIR/boot/Image.gz
-else
-    gzip -c arch/$ARCH/boot/Image > arch/$ARCH/boot/Image.gz
-    install -Dm644 arch/$ARCH/boot/Image.gz $PKGDIR/boot/Image.gz
-fi
-
-install -Dm644 arch/$ARCH/boot/dts/qcom/sm8550-xiaomi-sheng.dtb $PKGDIR/boot/sm8550-xiaomi-sheng.dtb
-    
-chmod +x ../mkbootimg
-
-echo "📱 正在组装专属于你的 [高通标准 A/B 槽对齐] 双系统刷机镜像 boot.img..."
-# 🚨 核心改动：废除 cat 拼合，采用纯正的 --dtb 参数，并在 ABL 允许的偏置下完全对齐！
-../mkbootimg --kernel arch/arm64/boot/Image.gz \
-             --dtb arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb \
-             --cmdline "root=PARTLABEL=linux rootwait console=ttyMSM0,115200 fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7" \
-             --base 0x00000000 \
-             --kernel_offset 0x00080000 \
-             --ramdisk_offset 0x01000000 \
-             --tags_offset 0x00000100 \
-             --dtb_offset 0x01f00000 \
-             --pagesize 4096 \
-             --header_version 2 \
-             -o ../boot_pad6spro_game_dualboot.img
-
-cp ../boot_pad6spro_game_dualboot.img ../boot_pad6spro_game_singleboot.img
-
-echo "🧱 安装内核模块..."
-make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 INSTALL_MOD_PATH=$PKGDIR modules_install
-rm -rf $PKGDIR/lib/modules/**/build
-cd ..
-
-echo "🧬 拉取固件与外设配置..."
-git clone https://github.com/map220v/sheng-firmware --depth 1
-mkdir -p firmware-xiaomi-sheng/usr/lib/firmware
-cp -r sheng-firmware/* firmware-xiaomi-sheng/usr/lib/firmware/
-rm -rf sheng-firmware
-
-git clone https://github.com/alghiffaryfa19/alsa-sheng --depth 1
-cp -r alsa-sheng/* alsa-xiaomi-sheng/
-rm -rf alsa-sheng
-
-echo "📦 正在执行打包..."
-dpkg-deb --build --root-owner-group "$GAME_PKG_NAME"
-dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
-dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
-
-echo "🎉 B 槽满血对齐版内核构建任务圆满结束！"
+# 📦 打包重构
+# =================

@@ -4,8 +4,8 @@ set -e
 IMAGE_SIZE="8G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 FEDORA_VERSION="44"
-# 使用清华镜像源，并切换至正式版仓库路径
-FEDORA_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/fedora/linux"
+# 关键修改：使用 Fedora 官方 CDN，同步最快
+FEDORA_MIRROR="https://download.fedoraproject.org/pub/fedora/linux"
 
 usage() { echo "用法: $0 <kernel_version>"; exit 1; }
 [ $# -ne 1 ] && usage
@@ -16,11 +16,11 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 ROOTFS_IMG="fedora44_${TIMESTAMP}.img"
 
 echo "=========================================="
-echo "开始构建 Fedora $FEDORA_VERSION (ARM64) RootFS"
+echo "开始构建 Fedora $FEDORA_VERSION (ARM64) RootFS (使用官方源)"
 echo "将从 kernel-bundle-$KERNEL 中提取固件并注入"
 echo "=========================================="
 
-# --- 提取固件（与之前相同，优先使用 firmware-xiaomi-sheng.deb）---
+# --- 提取固件 ---
 FW_TEMP_DIR=$(mktemp -d)
 FW_SOURCE_DIR=""
 if [ -f firmware-xiaomi-sheng.deb ]; then
@@ -51,7 +51,7 @@ mkdir rootdir
 mount -o loop "$ROOTFS_IMG" rootdir
 ROOTDIR_ABS=$(realpath rootdir)
 
-# --- 使用 dnf 安装基础系统，切换至正式版的 releases/44/Everything 目录---
+# --- 关键修改：使用官方源进行基础系统安装 ---
 dnf --installroot="$ROOTDIR_ABS" \
     --releasever=$FEDORA_VERSION \
     --forcearch=aarch64 \

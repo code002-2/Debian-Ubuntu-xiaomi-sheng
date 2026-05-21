@@ -68,7 +68,7 @@ echo "📥 正在下载基础内核配置文件..."
 wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/sheng/device/testing/linux-postmarketos-qcom-sm8550/config-postmarketos-qcom-sm8550.aarch64 -O .config
 
 # ========================================================
-# 🛠️ 核心自愈与强制全内置策略（专治亮MI后黑屏）
+# 🛠️ 核心自愈与强制全内置策略（针对 linux 实体分区深度优化）
 # ========================================================
 echo "🩹 [1/5] 正在全量扫荡并修复所有驱动中残留的旧版 of_gpio.h 引用..."
 find drivers/ sound/ -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/#include <linux\/of_gpio.h>/#include <linux\/gpio\/consumer.h>/g' {} + 2>/dev/null || true
@@ -87,28 +87,27 @@ if [ -f drivers/gpu/drm/msm/msm_gem.c ]; then
 fi
 
 echo "🚀 [4/5] 执行核心驱动『模块转内置』硬核手术..."
-# 1. 强行把高通 8 Gen 2 核心时钟、引脚、互联总线从模块(=m)砸成内置(=y)
 sed -i 's/CONFIG_PINCTRL_SM8550=m/CONFIG_PINCTRL_SM8550=y/g' .config
 sed -i 's/CONFIG_SM_GCC_8550=m/CONFIG_SM_GCC_8550=y/g' .config
 sed -i 's/CONFIG_SM_DISPCC_8550=m/CONFIG_SM_DISPCC_8550=y/g' .config
 sed -i 's/CONFIG_INTERCONNECT_QCOM_SM8550=m/CONFIG_INTERCONNECT_QCOM_SM8550=y/g' .config
 sed -i 's/CONFIG_QCOM_RPMHPD=m/CONFIG_QCOM_RPMHPD=y/g' .config
 
-# 2. 强行把 UFS 闪存核心栈从模块(=m)转换为内置(=y)
+# 强制将高通 UFS 核心彻底砸进内核，确保能在不依赖 ramdisk 的情况下第一时间扫描分区表
 sed -i 's/CONFIG_SCSI_UFS_QCOM=m/CONFIG_SCSI_UFS_QCOM=y/g' .config
 sed -i 's/CONFIG_SCSI_UFSHCD_PLATFORM=m/CONFIG_SCSI_UFSHCD_PLATFORM=y/g' .config
 sed -i 's/CONFIG_SCSI_UFSHCD=m/CONFIG_SCSI_UFSHCD=y/g' .config
 
-# 3. 强开文本虚拟终端控制台与 Framebuffer 终端（消灭亮MI后瞎子黑屏）
+# 强开虚拟控制台与小企鹅屏显
 echo "CONFIG_VT=y" >> .config
 echo "CONFIG_VT_CONSOLE=y" >> .config
 echo "CONFIG_FRAMEBUFFER_CONSOLE=y" >> .config
 echo "CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y" >> .config
 echo "CONFIG_FONT_8x16=y" >> .config
 echo "CONFIG_LOGO=y" >> .config
-echo "CONFIG_LOGO_LINUX_CLUT224=y" >> .config # 强制开启开机 Linux 小企鹅图标
+echo "CONFIG_LOGO_LINUX_CLUT224=y" >> .config
 
-# 4. 强行锁死高通显示核心与底层 Regulator 电源
+# 强行保活高通显示与供电总线
 echo "CONFIG_DRM_MSM=y" >> .config
 echo "CONFIG_REGULATOR=y" >> .config
 echo "CONFIG_REGULATOR_QCOM=y" >> .config
@@ -119,10 +118,16 @@ echo "CONFIG_DRM_PANEL_SIMPLE=y" >> .config
 echo "CONFIG_BACKLIGHT_CLASS_DEVICE=y" >> .config
 echo "CONFIG_BACKLIGHT_GPIO=y" >> .config
 
-# 保持极致瘦身
+# 极致优化体积以释放多系统引导区留白
 echo "CONFIG_CC_OPTIMIZE_FOR_SIZE=y" >> .config
 sed -i 's/CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/g' .config
 echo "CONFIG_DEBUG_INFO_NONE=y" >> .config
+
+# 🚨🚨🚨 【专治 linux 分区挂载死锁】 🚨🚨🚨
+# 1. 强制锁死基本内核参数
+# 2. 我们通过 rootwait 强制内核无限期等待物理磁盘初始化完毕
+echo 'CONFIG_CMDLINE="console=ttyMSM0,115200 earlycon=msm_geni_serial,0xaec00000 rootwait fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7 panic=0 pm_poweroff.reset_type=1"' >> .config
+echo "CONFIG_CMDLINE_FORCE=y" >> .config
 
 # ========================================================
 # 🏷️ [5/5] 核心改名
@@ -156,7 +161,7 @@ _kernel_version="$(make kernelrelease -s)"
 echo "📦 最终构建出的内核定制版本号为: ${_kernel_version}"
 
 # ========================================================
-# 📦 打包重构
+# 📦 打包重构：强制绑定 linux 分区并覆盖 Dual 引导参数
 # ========================================================
 GAME_PKG_NAME="linux-xiaomi-pad-6s-pro-game"
 PKGDIR="../${GAME_PKG_NAME}"
@@ -172,7 +177,7 @@ else
     echo "Version: ${_kernel_version}" >> "${PKGDIR}/DEBIAN/control"
     echo "Architecture: arm64" >> "${PKGDIR}/DEBIAN/control"
     echo "Maintainer: github-actions" >> "${PKGDIR}/DEBIAN/control"
-    echo "Description: Upstream 7.1 Linux kernel full built-in for Xiaomi Pad 6S Pro Game" >> "${PKGDIR}/DEBIAN/control"
+    echo "Description: Upstream 7.1 Linux kernel mapped to dedicated linux partition" >> "${PKGDIR}/DEBIAN/control"
 fi
 
 ARCH=arm64
@@ -190,17 +195,19 @@ install -Dm644 .config $PKGDIR/boot/config-${_kernel_version}
 install -Dm644 System.map $PKGDIR/boot/System.map-${_kernel_version}
     
 chmod +x ../mkbootimg
-cat arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb > Image.gz-dtb_game
-install -Dm644 Image.gz-dtb_game $PKGDIR/boot/Image.gz-dtb_game
-mv Image.gz-dtb_game zImage_game
 
-# 🚨 【CMDLINE 注入文本控制台强制绑定】
-# 强行追加 fbcon=nodefer：不允许内核延迟初始化控制台，一经接管立刻强制输出画面
-NEW_CMDLINE="console=ttyMSM0,115200 earlycon=msm_geni_serial,0xaec00000 root=PARTLABEL=linux rootwait fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7 panic=0 pm_poweroff.reset_type=1"
+# 🚨🚨🚨 【外部打包命令硬核锁定：强制指向 linux 物理分区】 🚨🚨🚨
+# 1. 显式指定 root=PARTLABEL=linux 告诉双系统 ABL 必须寻找名为 linux 的分区。
+# 2. 独立打包 --dtb 块，防止双系统切换菜单污染设备树。
+echo "📱 正在组装专属于你的 [linux分区独立引导] 双系统刷机镜像 boot.img..."
 
-echo "📱 正在组装 Android [全内置保活文本终端] 刷机镜像 boot.img..."
-../mkbootimg --kernel zImage_game --cmdline "${NEW_CMDLINE}" --base 0x00000000 --kernel_offset 0x00080000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dtb_offset 0x01f00000 --pagesize 4096 --id -o ../boot_pad6spro_game_dualboot.img
-../mkbootimg --kernel zImage_game --cmdline "${NEW_CMDLINE}" --base 0x00000000 --kernel_offset 0x00080000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dtb_offset 0x01f00000 --pagesize 4096 --id -o ../boot_pad6spro_game_singleboot.img
+../mkbootimg --kernel arch/arm64/boot/Image.gz \
+             --dtb arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb \
+             --cmdline "root=PARTLABEL=linux rootwait console=ttyMSM0,115200 fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7" \
+             --base 0x00000000 --kernel_offset 0x00080000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dtb_offset 0x01f00000 --pagesize 4096 --id -o ../boot_pad6spro_game_dualboot.img
+
+# 副本，供防灾备份使用
+cp ../boot_pad6spro_game_dualboot.img ../boot_pad6spro_game_singleboot.img
 
 echo "🧱 安装内核模块..."
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 INSTALL_MOD_PATH=$PKGDIR modules_install
@@ -228,4 +235,4 @@ if [ -d "sheng-devauth" ]; then
     dpkg-deb --build --root-owner-group sheng-devauth
 fi
 
-echo "🎉 全内置保活版内核构建任务圆满结束！"
+echo "🎉 独立 linux 分区全内置构建任务圆满结束！"

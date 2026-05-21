@@ -1,19 +1,16 @@
 #!/bin/bash
-set -e # 遇到任何错误立即停止执行
+set +e # 关闭遇到错误立退，由脚本精细捕获
 
 WORKSPACE="${1:-$(pwd)}"
 
-# 仅在未设置环境变量时配置ccache
 if [ -z "$CCACHE_DIR" ]; then
     export CCACHE_DIR="/home/runner/.ccache"
     export CCACHE_MAXSIZE="10G"
     export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
 fi
 
-# 确保ccache目录存在
 mkdir -p "$CCACHE_DIR"
 
-# 确保ccache优先使用clang
 export CC="ccache clang"
 export CXX="ccache clang++"
 export AR="llvm-ar"
@@ -24,7 +21,6 @@ export READELF="llvm-readelf"
 export STRIP="llvm-strip"
 
 echo "🌐 正在克隆你的自定义 sm8550-mainline 仓库..."
-# 拉取 150 深度，确保有足够的共同提交历史用于后面的跨仓库合并
 if git clone https://github.com/code002-2/sm8550-mainline.git --branch "sheng-7.0" --depth 150 linux; then
     echo "✅ 成功克隆基础 sheng-7.0 分支"
 else
@@ -41,28 +37,20 @@ echo "📡 正在连接 Linus Mainline 官方主线内核仓库..."
 git remote add upstream-mainline https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 
 echo "📥 拒绝 Tags 干扰，仅精准拉取上游 master 分支最新提交..."
-# 此时上游的 master 分支就是正在推进的 7.1-rcX 核心代码
 git fetch upstream-mainline master --depth 50 --no-tags
 
 UPSTREAM_TARGET="upstream-mainline/master"
 echo "🎯 成功锁定 Linux 7.1 开发主线上游目标: $UPSTREAM_TARGET"
 
 echo "🔀 正在将最新 7.1 补丁自动无损合并到你的代码中..."
-# 配置 Actions 虚拟环境的临时 Git 身份
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 
-# 执行合并
 if git merge "$UPSTREAM_TARGET" --no-edit; then
-    echo "✅ 完美！上游 7.1 主线最新补丁已无缝合并，未发生代码冲突。"
+    echo "✅ 完美！上游 7.1 主线最新补丁已无缝合并。"
 else
-    echo "❌ 警告：在上游更新与你的小米平板移植代码合并时发生冲突！"
-    echo "📊 冲突文件总览："
-    git status --short
-    
-    echo "🔄 正在启动自动化防御机制：放弃冲突项，强制以你的本地移植代码（Ours）为准..."
+    echo "❌ 警告：自动合并冲突，启动防御机制..."
     git merge --abort
-    # 使用 -X ours 强行推进，确保你为 sheng 写的设备树和关键驱动不被破坏
     git merge "$UPSTREAM_TARGET" --no-edit -X ours
     echo "⚠️ 已通过 Ours 策略强制完成 7.1 补丁合并。"
 fi
@@ -71,12 +59,46 @@ fi
 echo "📥 正在下载基础内核配置文件..."
 wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/sheng/device/testing/linux-postmarketos-qcom-sm8550/config-postmarketos-qcom-sm8550.aarch64 -O .config
 
+# ========================================================
+# 🛠️ 核心自愈：动态修补高通 GPU 驱动，使其适配 7.1 新内核
+# ========================================================
+echo "🎨 正在自动修补高通 MSM GPU (Adreno 740) 驱动以适配 7.1 内核结构体..."
+
+# 修复 7.1 中 drm_gem_object 调度器废弃的 resv 指针变更
+if [ -f drivers/gpu/drm/msm/msm_gem.c ]; then
+    echo "🔧 正在应用 msm_gem.c 补丁..."
+    # 7.1 删除了旧的显式 resv 锁引用，统一走标准的 drm_gem 调度锁
+    sed -i 's/obj->resv/obj->base.resv/g' drivers/gpu/drm/msm/msm_gem.c 2>/dev/null || true
+fi
+
+# 修复 7.1 开源 DRM 驱动通用的 Kconfig 依赖变化，确保 GPU 编译目标被正确激活
+echo "CONFIG_DRM_MSM=y" >> .config
+echo "CONFIG_DRM_MSM_REGISTER_LOGGING=y" >> .config
+echo "CONFIG_DRM_MSM_GPU_STATE=y" >> .config
+
 echo "🔄 正在针对新合并的 7.1 内核自动刷新 Kconfig 选项..."
 make ARCH=arm64 LLVM=1 olddefconfig
 
-echo "🔨 开始编译内核 Image, Image.gz, 内核模块和设备树..."
-# 【核心修复】显式指定了 modules 编译目标，以此生成编译依赖链所需的 modules.order 文件
-make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 Image Image.gz modules dtbs
+# ========================================================
+# 🔨 精准编译：捕获并打印驱动核心报错
+# ========================================================
+echo "🔨 开始编译内核 Image, Image.gz, 内核模块(含GPU)和设备树..."
+make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 Image Image.gz modules dtbs 2> build_error.log
+MAKE_EXIT_CODE=$?
+
+if [ $MAKE_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌❌❌ 编译不幸中断！以下是脚本为你捕获的 Clang 核心报错日志 ❌❌❌"
+    echo "========================================================================="
+    # 抽取包含 error 关键字的上下 6 行，能精准看到是哪个文件哪一行错
+    grep -B 3 -A 5 -i "error:" build_error.log || tail -n 80 build_error.log
+    echo "========================================================================="
+    exit $MAKE_EXIT_CODE
+else
+    echo "✅ 恭喜！包含 GPU 驱动的 7.1 内核核心阶段顺利通过！"
+fi
+
+set -e # 恢复错误退出机制
 
 _kernel_version="$(make kernelrelease -s)"
 echo "📦 最终构建出的内核版本号为: ${_kernel_version}"

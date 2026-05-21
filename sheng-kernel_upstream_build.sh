@@ -3,13 +3,20 @@ set +e # 关闭遇到错误立退，由脚本精细捕获
 
 WORKSPACE="${1:-$(pwd)}"
 
+# ========================================================
+# ⚡ CCache 极致满血唤醒配置
+# ========================================================
 if [ -z "$CCACHE_DIR" ]; then
     export CCACHE_DIR="/home/runner/.ccache"
-    export CCACHE_MAXSIZE="10G"
-    export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
 fi
-
 mkdir -p "$CCACHE_DIR"
+
+export CCACHE_MAXSIZE="15G"
+export CCACHE_COMPRESS=1
+export CCACHE_COMPRESSLEVEL=5
+export CCACHE_SLOPPINESS="file_macro,locale,time_macros,include_file_mtime,include_file_ctime,file_stat_matches"
+export CCACHE_BASEDIR="$WORKSPACE"
+export CCACHE_NOHASHDIR=1
 
 export CC="ccache clang"
 export CXX="ccache clang++"
@@ -19,6 +26,9 @@ export OBJCOPY="llvm-objcopy"
 export OBJDUMP="llvm-objdump"
 export READELF="llvm-readelf"
 export STRIP="llvm-strip"
+
+echo "📊 当前 ccache 初始缓存状态统计："
+ccache -s
 
 echo "🌐 正在克隆你的自定义 sm8550-mainline 仓库..."
 if git clone https://github.com/code002-2/sm8550-mainline.git --branch "sheng-7.0" --depth 150 linux; then
@@ -31,6 +41,12 @@ fi
 echo "🛡️ 正在物理隔离并备份本地验证通过的设备树文件..."
 mkdir -p dtb_backup
 cp -r linux/arch/arm64/boot/dts/qcom/* dtb_backup/ 2>/dev/null || true
+
+# 🛡️ 额外备份 7.0 稳定的高通核心驱动，防止被 7.1 冲垮
+echo "🛡️ 正在物理隔离备份 7.0 稳定的高通时钟与存储控制器驱动..."
+mkdir -p qcom_drivers_backup/clk qcom_drivers_backup/ufs
+cp -r linux/drivers/clk/qcom/* qcom_drivers_backup/clk/ 2>/dev/null || true
+cp -r linux/drivers/ufs/* qcom_drivers_backup/ufs/ 2>/dev/null || true
 
 cd linux
 
@@ -59,16 +75,23 @@ else
     echo "⚠️ 已通过 Ours 策略强制完成 7.1 补丁合并。"
 fi
 
+# ========================================================
+# 🛡️ 降级防御：强制将破坏的高通底层核心驱动剔除，滚回 7.0 稳定版
+# ========================================================
 echo "♻️ 正在强行还原稳定的高通小米设备树，覆盖 7.1 错乱节点..."
 cp -r ../dtb_backup/* arch/arm64/boot/dts/qcom/ 2>/dev/null || true
-echo "✅ 设备树总线结构体强制回滚至安全状态"
+
+echo "♻️ 🦾 正在强行把 7.1 的高通时钟与 UFS 驱动剔除，降级回滚至 7.0 绝对稳定版..."
+cp -r ../qcom_drivers_backup/clk/* drivers/clk/qcom/ 2>/dev/null || true
+cp -r ../qcom_drivers_backup/ufs/* drivers/ufs/ 2>/dev/null || true
+echo "✅ 高通底层驱动底座强制回滚至安全状态"
 # ========================================================
 
 echo "📥 正在下载基础内核配置文件..."
 wget https://gitlab.postmarketos.org/alghiffaryfa19/pmaports/-/raw/sheng/device/testing/linux-postmarketos-qcom-sm8550/config-postmarketos-qcom-sm8550.aarch64 -O .config
 
 # ========================================================
-# 🛠️ 核心自愈与强制全内置策略（针对 linux 实体分区深度优化）
+# 🛠️ 核心自愈与强制全内置策略
 # ========================================================
 echo "🩹 [1/5] 正在全量扫荡并修复所有驱动中残留的旧版 of_gpio.h 引用..."
 find drivers/ sound/ -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/#include <linux\/of_gpio.h>/#include <linux\/gpio\/consumer.h>/g' {} + 2>/dev/null || true
@@ -93,12 +116,10 @@ sed -i 's/CONFIG_SM_DISPCC_8550=m/CONFIG_SM_DISPCC_8550=y/g' .config
 sed -i 's/CONFIG_INTERCONNECT_QCOM_SM8550=m/CONFIG_INTERCONNECT_QCOM_SM8550=y/g' .config
 sed -i 's/CONFIG_QCOM_RPMHPD=m/CONFIG_QCOM_RPMHPD=y/g' .config
 
-# 强制将高通 UFS 核心彻底砸进内核，确保能在不依赖 ramdisk 的情况下第一时间扫描分区表
 sed -i 's/CONFIG_SCSI_UFS_QCOM=m/CONFIG_SCSI_UFS_QCOM=y/g' .config
 sed -i 's/CONFIG_SCSI_UFSHCD_PLATFORM=m/CONFIG_SCSI_UFSHCD_PLATFORM=y/g' .config
 sed -i 's/CONFIG_SCSI_UFSHCD=m/CONFIG_SCSI_UFSHCD=y/g' .config
 
-# 强开虚拟控制台与小企鹅屏显
 echo "CONFIG_VT=y" >> .config
 echo "CONFIG_VT_CONSOLE=y" >> .config
 echo "CONFIG_FRAMEBUFFER_CONSOLE=y" >> .config
@@ -107,7 +128,6 @@ echo "CONFIG_FONT_8x16=y" >> .config
 echo "CONFIG_LOGO=y" >> .config
 echo "CONFIG_LOGO_LINUX_CLUT224=y" >> .config
 
-# 强行保活高通显示与供电总线
 echo "CONFIG_DRM_MSM=y" >> .config
 echo "CONFIG_REGULATOR=y" >> .config
 echo "CONFIG_REGULATOR_QCOM=y" >> .config
@@ -118,14 +138,11 @@ echo "CONFIG_DRM_PANEL_SIMPLE=y" >> .config
 echo "CONFIG_BACKLIGHT_CLASS_DEVICE=y" >> .config
 echo "CONFIG_BACKLIGHT_GPIO=y" >> .config
 
-# 极致优化体积以释放多系统引导区留白
 echo "CONFIG_CC_OPTIMIZE_FOR_SIZE=y" >> .config
 sed -i 's/CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/g' .config
 echo "CONFIG_DEBUG_INFO_NONE=y" >> .config
 
-# 🚨🚨🚨 【专治 linux 分区挂载死锁】 🚨🚨🚨
-# 1. 强制锁死基本内核参数
-# 2. 我们通过 rootwait 强制内核无限期等待物理磁盘初始化完毕
+# 强制锁死基本参数，配合物理 linux 分区识别
 echo 'CONFIG_CMDLINE="console=ttyMSM0,115200 earlycon=msm_geni_serial,0xaec00000 rootwait fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7 panic=0 pm_poweroff.reset_type=1"' >> .config
 echo "CONFIG_CMDLINE_FORCE=y" >> .config
 
@@ -146,6 +163,9 @@ echo "🔨 开始编译内核 Image, Image.gz, 内核模块和设备树..."
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 Image Image.gz modules dtbs 2> build_error.log
 MAKE_EXIT_CODE=$?
 
+echo "📊 编译结束，当前 ccache 缓存情况："
+ccache -s
+
 if [ $MAKE_EXIT_CODE -ne 0 ]; then
     echo ""
     echo "❌❌❌ 编译不幸中断！以下是脚本为你捕获的 Clang 核心报错日志 ❌❌❌"
@@ -161,7 +181,7 @@ _kernel_version="$(make kernelrelease -s)"
 echo "📦 最终构建出的内核定制版本号为: ${_kernel_version}"
 
 # ========================================================
-# 📦 打包重构：强制绑定 linux 分区并覆盖 Dual 引导参数
+# 📦 打包重构
 # ========================================================
 GAME_PKG_NAME="linux-xiaomi-pad-6s-pro-game"
 PKGDIR="../${GAME_PKG_NAME}"
@@ -177,7 +197,7 @@ else
     echo "Version: ${_kernel_version}" >> "${PKGDIR}/DEBIAN/control"
     echo "Architecture: arm64" >> "${PKGDIR}/DEBIAN/control"
     echo "Maintainer: github-actions" >> "${PKGDIR}/DEBIAN/control"
-    echo "Description: Upstream 7.1 Linux kernel mapped to dedicated linux partition" >> "${PKGDIR}/DEBIAN/control"
+    echo "Description: Upstream 7.1 Linux kernel with 7.0 core drivers fallback" >> "${PKGDIR}/DEBIAN/control"
 fi
 
 ARCH=arm64
@@ -196,17 +216,12 @@ install -Dm644 System.map $PKGDIR/boot/System.map-${_kernel_version}
     
 chmod +x ../mkbootimg
 
-# 🚨🚨🚨 【外部打包命令硬核锁定：强制指向 linux 物理分区】 🚨🚨🚨
-# 1. 显式指定 root=PARTLABEL=linux 告诉双系统 ABL 必须寻找名为 linux 的分区。
-# 2. 独立打包 --dtb 块，防止双系统切换菜单污染设备树。
-echo "📱 正在组装专属于你的 [linux分区独立引导] 双系统刷机镜像 boot.img..."
-
+echo "📱 正在组装专属于你的 [驱动回滚防闪退版] 双系统刷机镜像 boot.img..."
 ../mkbootimg --kernel arch/arm64/boot/Image.gz \
              --dtb arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb \
              --cmdline "root=PARTLABEL=linux rootwait console=ttyMSM0,115200 fbcon=nodefer msm_drm.allow_fb_modifiers=1 loglevel=7" \
              --base 0x00000000 --kernel_offset 0x00080000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --dtb_offset 0x01f00000 --pagesize 4096 --id -o ../boot_pad6spro_game_dualboot.img
 
-# 副本，供防灾备份使用
 cp ../boot_pad6spro_game_dualboot.img ../boot_pad6spro_game_singleboot.img
 
 echo "🧱 安装内核模块..."
@@ -235,4 +250,4 @@ if [ -d "sheng-devauth" ]; then
     dpkg-deb --build --root-owner-group sheng-devauth
 fi
 
-echo "🎉 独立 linux 分区全内置构建任务圆满结束！"
+echo "🎉 核心底层回滚版内核构建任务圆满结束！"

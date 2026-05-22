@@ -36,34 +36,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           name: "Ubuntu 26.04 Desktop - ${{ steps.tag.outputs.release_tag }}"
-          body: |
-            🐧 Ubuntu 26.04 LTS (Resolute Raccoon) Desktop
-            
-            ---
-            
-            ### 📋 构建信息
-            | 项目 | 详情 |
-            |------|------|
-            | Ubuntu版本 | 26.04 LTS (Resolute) |
-            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.0' }} |
-            | 桌面环境 | GNOME, KDE Plasma, Xfce |
-            
-            ---
-            
-            ### 🔐 默认凭据
-            - 用户名: `luser`
-            - 密码: `luser`
-            
-            ---
-            
-            ### 🌐 语言环境
-            - 系统语言: 英文 (en_US.UTF-8)
-            
-            ---
-            
-            ### 📦 镜像文件
-            构建完成后将出现在下方附件中。
-          draft: false
+          body: "自动化构建的 Ubuntu 26.04 RootFS 镜像。"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -84,10 +57,10 @@ jobs:
       - name: Download kernel bundle
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
-          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          [ -z "$KERNEL_VER" ] && KERNEL_VER="7.0"
           
           gh release download "kernel-bundle-${KERNEL_VER}" \
-            --pattern "*.deb" --repo "${{ github.repository }}" --clobber
+            --pattern "*.deb" --repo "${{ github.repository }}" --clobber || echo "警告: 未找到内核包"
           ls -la *.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,20 +69,27 @@ jobs:
         id: build
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
-          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          [ -z "$KERNEL_VER" ] && KERNEL_VER="7.0"
           
           chmod +x build-ubuntu26-rootfs.sh
+          # 执行构建脚本
           sudo ./build-ubuntu26-rootfs.sh ${KERNEL_VER} ${{ matrix.desktop_env }}
           
+          # 查找生成的 .7z 文件并输出路径
           SEVEN_Z_FILE=$(ls ubuntu26_${{ matrix.desktop_env }}_*.7z | head -1)
-          echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
+          if [ -z "$SEVEN_Z_FILE" ]; then
+            echo "错误: 构建产物未找到！"
+            exit 1
+          fi
           echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ubuntu26-${{ matrix.desktop_env }}
-          path: ${{ steps.build.outputs.path }}
+          path: |
+            ${{ steps.build.outputs.path }}
+            ubuntu26_${{ matrix.desktop_env }}_*.7z
           retention-days: 7
 
       - name: Upload to Release

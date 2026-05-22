@@ -1,4 +1,4 @@
-name: 🐧 Build Ubuntu 26.04 Desktop
+name: 🐧 Build Ubuntu 26.04 Desktop (GNOME/KDE/Xfce)
 
 on:
   workflow_dispatch:
@@ -20,47 +20,103 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+    steps:
+      - name: Generate release tag
+        id: tag
+        run: |
+          TAG="ubuntu26-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
+          echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Create GitHub Release
+        if: ${{ !github.event.inputs.skip_release }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: "Ubuntu 26.04 Desktop - ${{ steps.tag.outputs.release_tag }}"
+          body: |
+            🐧 Ubuntu 26.04 LTS (Resolute Raccoon) Desktop
+            
+            ---
+            
+            ### 📋 构建信息
+            | 项目 | 详情 |
+            |------|------|
+            | Ubuntu版本 | 26.04 LTS (Resolute) |
+            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.0' }} |
+            | 桌面环境 | GNOME, KDE Plasma, Xfce |
+            
+            ---
+            
+            ### 🔐 默认凭据
+            - 用户名: `luser`
+            - 密码: `luser`
+            
+            ---
+            
+            ### 🌐 语言环境
+            - 系统语言: 英文 (en_US.UTF-8)
+            
+            ---
+            
+            ### 📦 镜像文件
+            构建完成后将出现在下方附件中。
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-desktop:
     name: Build Ubuntu 26.04 Desktop (${{ matrix.desktop_env }})
     runs-on: ubuntu-24.04-arm
+    needs: prepare-release
     strategy:
       matrix:
-        desktop_env: [gnome]
+        desktop_env: [gnome, kde, xfce]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
       
-      # [关键补丁] 修复 debootstrap command not found 错误
       - name: Install build tools
+        run: sudo apt update && sudo apt install -y debootstrap p7zip-full curl
+
+      - name: Download kernel bundle
         run: |
-          sudo apt update
-          sudo apt install -y debootstrap p7zip-full curl qemu-user-static binfmt-support
+          KERNEL_VER="${{ github.event.inputs.kernel_version }}"
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          
+          gh release download "kernel-bundle-${KERNEL_VER}" \
+            --pattern "*.deb" --repo "${{ github.repository }}" --clobber
+          ls -la *.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build RootFS
+        id: build
         run: |
-          chmod +x build-ubuntu26-rootfs.sh
-          # 执行构建脚本
-          sudo bash -x ./build-ubuntu26-rootfs.sh ${{ github.event.inputs.kernel_version }} ${{ matrix.desktop_env }}
+          KERNEL_VER="${{ github.event.inputs.kernel_version }}"
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
           
-          # 验证文件是否生成
-          if [ -z "$(ls ubuntu26_${{ matrix.desktop_env }}_*.7z 2>/dev/null)" ]; then
-            echo "错误: 未找到生成的 .7z 镜像文件"
-            ls -lh
-            exit 1
-          fi
+          chmod +x build-ubuntu26-rootfs.sh
+          sudo ./build-ubuntu26-rootfs.sh ${KERNEL_VER} ${{ matrix.desktop_env }}
+          
+          SEVEN_Z_FILE=$(ls ubuntu26_${{ matrix.desktop_env }}_*.7z | head -1)
+          echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
+          echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ubuntu26-${{ matrix.desktop_env }}
-          # 使用通配符完美匹配带时间戳的文件名
-          path: ubuntu26_${{ matrix.desktop_env }}_*.7z
+          path: ${{ steps.build.outputs.path }}
           retention-days: 7
 
       - name: Upload to Release
         if: ${{ !github.event.inputs.skip_release }}
         uses: softprops/action-gh-release@v1
         with:
-          files: ubuntu26_${{ matrix.desktop_env }}_*.7z
+          tag_name: ${{ needs.prepare-release.outputs.release_tag }}
+          files: ${{ steps.build.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

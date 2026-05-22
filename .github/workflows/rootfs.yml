@@ -90,7 +90,7 @@ jobs:
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
           if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
           
-          # 🚨 核心精简：取消一切 matrix 矩阵，直接只调用 debian 纯净桌面构建脚本
+          # 仅调用纯净 Debian 桌面构建脚本，不再传入任何 matrix 桌面环境参数
           chmod +x sheng-rootfs_build.sh
           sudo ./sheng-rootfs_build.sh debian ${KERNEL_VER}
           

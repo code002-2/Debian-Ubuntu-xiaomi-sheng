@@ -45,7 +45,7 @@ mount --bind /dev/pts rootdir/dev/pts
 mount -t proc proc rootdir/proc
 mount -t sysfs sys rootdir/sys
 
-# 🚨 终极 DNS 修复：强制写入公共 DNS，彻底绕过 Ubuntu 宿主机的 127.0.0.53 本地存根问题
+# 强制写入公共 DNS，彻底绕过 Ubuntu 宿主机的本地存根问题
 rm -f rootdir/etc/resolv.conf
 echo "nameserver 8.8.8.8" > rootdir/etc/resolv.conf
 echo "nameserver 1.1.1.1" >> rootdir/etc/resolv.conf
@@ -60,13 +60,13 @@ chroot rootdir pacman-key --populate archlinuxarm
 echo "📦 正在更新系统并安装基础组件..."
 chroot rootdir pacman -Syu --noconfirm systemd sudo vim wget curl networkmanager wpa_supplicant dbus
 
-# 强制解压 Debian 内核 .deb 包到 Arch rootfs 中并更新模块依赖
+echo "🔨 正在扫描并注入本地内核与系统固件包..."
+
+# 🚨 处理所有 .deb 格式文件 (通常是内核或打包好的固件)
 if ls *.deb 1> /dev/null 2>&1; then
-    echo "🔨 发现 Debian 内核包 (.deb)，正在将其强制提取到 Arch rootfs 中..."
-    
-    for deb in *.deb; do
-        echo "   正在提取 $deb ..."
-        dpkg-deb -x "$deb" rootdir/
+    for pkg in *.deb; do
+        echo "   -> 正在提取 $pkg ..."
+        dpkg-deb -x "$pkg" rootdir/
     done
     
     echo "   正在更新内核模块依赖..."
@@ -75,9 +75,20 @@ if ls *.deb 1> /dev/null 2>&1; then
         echo "   发现内核版本: $KERNEL_MODULE_DIR"
         chroot rootdir depmod -a "$KERNEL_MODULE_DIR" || true
     else
-        echo "   ⚠️ 未能在 /lib/modules/ 中找到内核模块目录，请检查 deb 包内容。"
+        echo "   ⚠️ 未能在 /lib/modules/ 中找到内核模块目录。"
     fi
 fi
+
+# 🚨 处理所有 .tar.gz 格式文件 (通常是散装固件或配置文件)
+if ls *.tar.gz 1> /dev/null 2>&1; then
+    for tarball in *.tar.gz; do
+        echo "   -> 正在解压系统包 $tarball ..."
+        tar -xzf "$tarball" -C rootdir/
+    done
+fi
+
+# 确保固件目录权限安全 (以防压缩包内权限混乱)
+chmod -R 755 rootdir/lib/firmware/ || true
 
 # 🌐 语言环境初始化
 echo 'en_US.UTF-8 UTF-8' > rootdir/etc/locale.gen
@@ -106,7 +117,7 @@ chmod 440 rootdir/etc/sudoers.d/wheel
 echo "🩹 正在针对高通 SM8550 (Sheng) 注入底层自愈补丁..."
 ln -sf /usr/lib/systemd/system/getty@.service rootdir/etc/systemd/system/getty.target.wants/getty@ttyMSM0.service
 
-# 激活 DNS 托管解析与网络服务 (此步骤会重新接管 DNS，完美覆盖我们刚才硬编码的 8.8.8.8)
+# 激活 DNS 托管解析与网络服务 (此步骤会接管 DNS，完美覆盖我们刚才硬编码的 8.8.8.8)
 chroot rootdir systemctl enable systemd-resolved
 chroot rootdir systemctl enable NetworkManager
 ln -sf /run/systemd/resolve/stub-resolv.conf rootdir/etc/resolv.conf
@@ -144,4 +155,4 @@ echo "🗜️ 正在生成最终 7z 压缩包..."
 7z a "archlinux_desktop_${TIMESTAMP}.7z" "$ROOTFS_IMG"
 rm -f "$ROOTFS_IMG"
 
-echo "🎉 精简桌面版 Arch Linux ARM 自动化编译全部圆满成功！
+echo "🎉 精简桌面版 Arch Linux ARM 自动化编译全部圆满成功！"

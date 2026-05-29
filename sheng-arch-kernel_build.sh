@@ -24,7 +24,18 @@ export STRIP="llvm-strip"
 git clone https://github.com/map220v/sm8550-mainline.git --branch sheng-7.0 --depth 1 linux
 cd linux
 
-cp ../config-postmarketos-qcom-sm8550.aarch64 .config
+echo "⚙️ 正在智能定位并配置内核..."
+# 优先使用 GitHub Actions 的绝对路径锁定文件，并支持模糊匹配后缀
+CONFIG_PATH=$(find "$GITHUB_WORKSPACE" ../ -maxdepth 2 -name "config*.aarch64" 2>/dev/null | head -n 1)
+
+if [ -n "$CONFIG_PATH" ]; then
+    echo "✅ 成功找到并复制配置文件: $CONFIG_PATH"
+    cp "$CONFIG_PATH" .config
+else
+    echo "❌ 致命错误: 找不到配置文件！请检查仓库中是否真的上传了该文件。当前仓库根目录文件列表："
+    ls -la "$GITHUB_WORKSPACE"
+    exit 1
+fi
 
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1
 _kernel_version="$(make kernelrelease -s)"

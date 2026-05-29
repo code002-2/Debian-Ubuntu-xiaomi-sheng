@@ -73,14 +73,21 @@ jobs:
       - name: Install build tools
         run: sudo apt update && sudo apt install -y libarchive-tools p7zip-full curl wget
 
-      - name: Download kernel bundle
+      - name: Download kernel and system bundles
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
           if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
           
+          # 从 GitHub Release 拉取内核和固件包
           gh release download "kernel-bundle-${KERNEL_VER}" \
-            --pattern "*.deb" --repo "${{ github.repository }}" --clobber || true
-          ls -la *.deb || echo "No custom kernel found."
+            --repo "${{ github.repository }}" --clobber || true
+            
+          # 🚨 新增：额外下载指定的 Debian Mesa 软件包
+          echo "⬇️ 正在下载 Debian Mesa dev 包..."
+          wget -q -O mesa-common-dev_26.0.7-1_arm64.deb "http://ftp.br.debian.org/debian/pool/main/m/mesa/mesa-common-dev_26.0.7-1_arm64.deb"
+          
+          echo "📥 下载的文件列表:"
+          ls -la
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

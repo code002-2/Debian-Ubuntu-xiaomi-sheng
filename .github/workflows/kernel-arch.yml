@@ -1,0 +1,49 @@
+name: 🛠️ Build Kernel（Arch linux）
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'sheng-arch-kernel_build.sh'
+
+jobs:
+  build-kernel:
+    name: Build Kernel & Modules
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex \
+            g++-aarch64-linux-gnu gcc-aarch64-linux-gnu \
+            libelf-dev libssl-dev lz4 \
+            python3 python3-pip wget \
+            clang lld llvm zstd
+          
+          # 下载 mkbootimg (如果仓库里没有的话)
+          wget -qO mkbootimg https://raw.githubusercontent.com/osm0sis/mkbootimg/master/mkbootimg
+          chmod +x mkbootimg
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: kernel-sm8550-arch
+          max-size: 10G
+
+      - name: Compile Kernel
+        run: |
+          chmod +x sheng-arch-kernel_build.sh
+          ./sheng-arch-kernel_build.sh
+
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-sheng-arch
+          path: |
+            out_arch_kernel/boot_sheng_dualboot.img
+            out_arch_kernel/sheng-modules.tar.gz
+          retention-days: 7

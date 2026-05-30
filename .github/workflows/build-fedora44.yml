@@ -1,85 +1,121 @@
-name: 构建 Fedora 44 RootFS
+name: 🌀 Build Fedora Desktop (Gnome)
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: '内核版本 (对应 kernel-bundle 标签，如 7.0)'
+        description: '内核版本 (如 7.0)'
         required: true
+        type: string
         default: '7.0'
       skip_release:
         description: '跳过创建GitHub Release'
         type: boolean
         default: false
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
 
 jobs:
   prepare-release:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: write
     outputs:
       release_tag: ${{ steps.tag.outputs.release_tag }}
     steps:
       - name: Generate release tag
         id: tag
-        run: echo "release_tag=fedora44-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="fedora-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
+          echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         if: ${{ !github.event.inputs.skip_release }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: "Fedora 44 RootFS - ${{ steps.tag.outputs.release_tag }}"
+          name: "Fedora Desktop - ${{ steps.tag.outputs.release_tag }}"
           body: |
-            🐧 Fedora 44 (ARM64) RootFS
-            - **内核版本**: ${{ github.event.inputs.kernel_version }}
-            - **桌面**: GNOME (GDM)
-            - **用户**: luser / 密码: luser ; root / 密码: 1234
+            🌀 Fedora ARM Desktop Gnome For SM8550
+            
+            ---
+            
+            ### 📋 构建信息
+            | 项目 | 详情 |
+            |------|------|
+            | 架构 | ARM64 (aarch64) |
+            | 系统版本 | Fedora 44 |
+            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.0' }} |
+            | 桌面环境 | GNOME |
+            
+            ---
+            
+            ### 🔐 默认凭据
+            - 普通用户: `luser` / 密码: `luser`
+            - 管理员用户: `root` / 密码: `1234`
+            
+            ---
+            
+            ### 📦 镜像文件
+            构建完成后将出现在下方附件中。解压后请直接使用 fastboot flash 刷入。
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-fedora:
+    name: Build Fedora Desktop
     runs-on: ubuntu-24.04-arm
     needs: prepare-release
     steps:
       - uses: actions/checkout@v4
+      
       - name: Install build tools
+        run: sudo apt update && sudo apt install -y libarchive-tools p7zip-full curl wget android-sdk-libsparse-utils docker.io
+
+      - name: Download kernel and system bundles
         run: |
-          sudo apt update
-          sudo apt install -y qemu-user-static debootstrap p7zip-full dpkg dnf
-      - name: Fix DNS resolution (workaround for Fedora mirrors)
-        run: |
-          # 备份原始 resolv.conf
-          sudo cp /etc/resolv.conf /etc/resolv.conf.bak
-          # 添加公共 DNS
-          echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-          echo "nameserver 1.1.1.1" | sudo tee -a /etc/resolv.conf
-          # 测试解析
-          ping -c 1 mirrors.ustc.edu.cn || true
-      - name: Download kernel bundle
-        run: |
-          gh release download "kernel-bundle-${{ github.event.inputs.kernel_version }}" \
-            --pattern "*.deb" --repo "${{ github.repository }}" --clobber
-          ls -la *.deb
+          KERNEL_VER="${{ github.event.inputs.kernel_version }}"
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          
+          gh release download "kernel-bundle-${KERNEL_VER}" \
+            --repo "${{ github.repository }}" --clobber || true
+            
+          echo "⬇️ 正在下载 Debian Mesa dev 包..."
+          wget -q -O mesa-common-dev_26.0.7-1_arm64.deb "http://ftp.br.debian.org/debian/pool/main/m/mesa/mesa-common-dev_26.0.7-1_arm64.deb"
+          
+          echo "📥 下载的文件列表:"
+          ls -la
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build RootFS (with firmware injection)
+
+      - name: Build RootFS
         id: build
         run: |
-          chmod +x build-fedora44-rootfs.sh
-          sudo ./build-fedora44-rootfs.sh ${{ github.event.inputs.kernel_version }}
-          echo "filename=$(ls fedora44_*.7z)" >> $GITHUB_OUTPUT
-      - name: Upload Artifact
+          KERNEL_VER="${{ github.event.inputs.kernel_version }}"
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          
+          chmod +x sheng-fedora-rootfs_build.sh
+          sudo ./sheng-fedora-rootfs_build.sh fedora ${KERNEL_VER}
+          
+          SEVEN_Z_FILE=$(ls fedora_desktop_*.7z | head -1)
+          echo "filename=$(basename "$SEVEN_Z_FILE")" >> $GITHUB_OUTPUT
+          echo "path=$SEVEN_Z_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fedora44-rootfs
-          path: ${{ steps.build.outputs.filename }}
+          name: fedora-desktop-gnome
+          path: ${{ steps.build.outputs.path }}
           retention-days: 7
+
       - name: Upload to Release
         if: ${{ !github.event.inputs.skip_release }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.prepare-release.outputs.release_tag }}
-          files: ${{ steps.build.outputs.filename }}
+          files: ${{ steps.build.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

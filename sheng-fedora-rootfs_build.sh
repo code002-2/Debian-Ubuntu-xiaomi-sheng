@@ -50,16 +50,20 @@ rm -f rootdir/etc/resolv.conf
 echo "nameserver 8.8.8.8" > rootdir/etc/resolv.conf
 echo "nameserver 1.1.1.1" >> rootdir/etc/resolv.conf
 
+echo "📦 正在安装编译工具 (提前安装，彻底避开内核排除规则)..."
+# 这一步没有任何 exclude，专门把 gcc 和 headers 稳稳地装进去
+chroot rootdir dnf -y install git gcc make kernel-headers
+
 echo "📦 正在更新 Fedora 系统并安装基础组件..."
-chroot rootdir dnf -y update --exclude=kernel*
-chroot rootdir dnf -y install --exclude=kernel* \
+# 这一步仅仅精准排除 kernel-core（这是触发 dracut 报错的唯一元凶）
+chroot rootdir dnf -y update --exclude=kernel-core
+chroot rootdir dnf -y install --exclude=kernel-core \
     systemd sudo vim wget curl tar xz pciutils findutils \
-    NetworkManager wpa_supplicant dialog \
-    git gcc make kernel-headers
+    NetworkManager wpa_supplicant dialog
 
 
 echo "🖥️ 正在安装 GNOME 桌面环境..."
-chroot rootdir dnf -y install @gnome-desktop
+chroot rootdir dnf -y install @gnome-desktop --exclude=kernel-core
 chroot rootdir dnf -y install gdm
 
 echo "🔨 正在扫描并注入本地内核与系统固件包..."

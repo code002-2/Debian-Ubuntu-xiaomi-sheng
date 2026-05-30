@@ -52,14 +52,16 @@ echo "nameserver 8.8.8.8" > rootdir/etc/resolv.conf
 echo "nameserver 1.1.1.1" >> rootdir/etc/resolv.conf
 
 echo "📦 正在更新 Fedora 系统并安装基础组件..."
-chroot rootdir dnf -y update
-chroot rootdir dnf -y install \
-    kernel-modules-core systemd sudo vim wget curl tar xz pciutils findutils \
+# 添加 --exclude=kernel* 屏蔽官方内核，直接消灭 dracut 报错，并加快打包速度！
+chroot rootdir dnf -y update --exclude=kernel*
+chroot rootdir dnf -y install --exclude=kernel* \
+    systemd sudo vim wget curl tar xz pciutils findutils \
     NetworkManager wpa_supplicant dialog \
     qrtr
 
 echo "🖥️ 正在安装 GNOME 桌面环境..."
-chroot rootdir dnf -y groupinstall "GNOME"
+# 适配 Fedora 41+ 的 DNF5 新语法：将 groupinstall 分开写为 group install
+chroot rootdir dnf -y group install "GNOME"
 chroot rootdir dnf -y install gdm
 
 echo "🔨 正在扫描并注入本地内核与系统固件包..."

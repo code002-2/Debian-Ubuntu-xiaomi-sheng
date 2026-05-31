@@ -79,8 +79,8 @@ chroot rootdir locale-gen en_US.UTF-8
 chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
 echo "deepin-sheng" > rootdir/etc/hostname
 
-# 安装 Deepin 核心桌面包 (dde 包含了最新的 25 控制中心、文件管理器等)
-chroot rootdir apt install -y --no-install-recommends dde lightdm
+echo "🖥️ 正在拉取 Deepin 官方桌面环境..."
+chroot rootdir bash -c "apt install -y --no-install-recommends deepin-desktop-environment lightdm || apt install -y --no-install-recommends deepin-desktop-environment-core dde-session-shell lightdm"
 
 # 创建普通用户 (luser / luser)
 chroot rootdir useradd -m -s /bin/bash luser

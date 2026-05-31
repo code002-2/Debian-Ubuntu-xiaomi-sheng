@@ -25,7 +25,7 @@ let
     # 4. 高通 FastRPC (DSP 通讯层)
     (pkgs.fetchurl {
       url = "https://github.com/code002-2/Xiaomi-pad-6s-pro-Linux/releases/download/kernel-bundle-7.0/fastrpc_1.0.2-1_arm64.deb";
-      sha256 = lib.fakeSha256; 
+      sha256 = "sha256-al0ggsBaN4qpImNBynIEpvHhRsvcUZk0m3GT8s5aJd4=";  
     })
     # 5. IIO 传感器代理
     (pkgs.fetchurl {

@@ -28,7 +28,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 ROOTFS_IMG="deepin25_1_0_desktop_${TIMESTAMP}.img"
 
 echo "=========================================="
-echo "⏳ 开始构建最前沿版 Deepin 25.1.0 RootFS (Wayland)"
+echo "⏳ 开始构建最前沿版 Deepin 25.1.0 RootFS (安全调试模式)"
 echo "内核版本: $KERNEL"
 echo "目标分支: $DEBIAN_SUITE"
 echo "=========================================="
@@ -116,20 +116,19 @@ ln -sf /run/systemd/resolve/stub-resolv.conf rootdir/etc/resolv.conf
 mkdir -p rootdir/etc/udev/rules.d/
 printf 'ENV{ID_INPUT_TOUCHSCREEN}=="1", ENV{LIBINPUT_CALIBRATION_MATRIX}="1 0 0 0 1 0 0 0 1"\n' > rootdir/etc/udev/rules.d/99-touchscreen-sheng.rules
 
-# ================= 🌌 Wayland 专属启动配置 开始 =================
-echo "🌌 配置全局 Wayland 渲染引擎与自动登录..."
+# ================= 🌌 调试安全配置 开始 =================
+echo "🌌 配置调试环境参数..."
 
-# 1. 强制所有 QT 应用和底层环境走 Wayland 协议
+# 1. 强制所有 QT 应用和底层环境走 Wayland 协议 (保留此配置为后续测试做准备)
 cat <<EOF > rootdir/etc/profile.d/wayland-force.sh
 export XDG_SESSION_TYPE=wayland
 export QT_QPA_PLATFORM="wayland;xcb"
 export MOZ_ENABLE_WAYLAND=1
-# 修复高通 GPU 在 Wayland 下可能的鼠标黑块问题
 export WLR_NO_HARDWARE_CURSORS=1
 EOF
 chmod +x rootdir/etc/profile.d/wayland-force.sh
 
-# 2. 配置 LightDM 自动登录，指定 Deepin Wayland 会话
+# 2. 配置 LightDM 自动登录
 mkdir -p rootdir/etc/lightdm/lightdm.conf.d
 cat <<EOF > rootdir/etc/lightdm/lightdm.conf.d/12-autologin.conf
 [Seat:*]
@@ -139,7 +138,10 @@ user-session=deepin-wayland
 EOF
 
 chroot rootdir systemctl enable lightdm
-chroot rootdir systemctl set-default graphical.target
+
+# 🚨 核心改动 1：强制系统开机只进入纯命令行模式，绝对不启动图形界面防死机
+echo "🛠️ 设置系统默认启动级别为命令行模式..."
+chroot rootdir systemctl set-default multi-user.target
 
 # 3. 屏蔽易导致卡死的声音服务，保留内核报错日志
 echo "🔇 正在禁用开机音效服务..."
@@ -147,12 +149,12 @@ chroot rootdir systemctl mask deepin-login-sound.service || true
 chroot rootdir systemctl mask deepin-login-sound-service.service || true
 chroot rootdir bash -c "sed -i 's/quiet splash//g' /etc/default/grub" 2>/dev/null || true
 
-# 4. 强制在 initramfs 极早期加载高通显示驱动 (KMS)
-echo "⚙️ 配置高通 GPU 早期渲染模块..."
-echo "msm" >> rootdir/etc/initramfs-tools/modules
-echo "gpu_sched" >> rootdir/etc/initramfs-tools/modules
-echo "panel_edp" >> rootdir/etc/initramfs-tools/modules
-# ================= 🌌 Wayland 专属启动配置 结束 =================
+# 🚨 核心改动 2：注释掉高通 KMS 早期强制加载模块，避免 initramfs 阶段屏幕锁死
+# echo "⚙️ 配置高通 GPU 早期渲染模块..."
+# echo "msm" >> rootdir/etc/initramfs-tools/modules
+# echo "gpu_sched" >> rootdir/etc/initramfs-tools/modules
+# echo "panel_edp" >> rootdir/etc/initramfs-tools/modules
+# ================= 🌌 调试安全配置 结束 =================
 
 # 文件系统挂载对齐
 printf "PARTLABEL=linux / ext4 defaults,noatime,errors=remount-ro 0 1\n" > rootdir/etc/fstab
@@ -179,4 +181,4 @@ echo "🗜️ 正在生成最终 7z 压缩包..."
 7z a "deepin25_1_0_desktop_${TIMESTAMP}.7z" "$ROOTFS_IMG"
 rm -f "$ROOTFS_IMG"
 
-echo "🎉 Deepin 25 Wayland 自动化编译全部圆满成功！"
+echo "🎉 Deepin 25 (命令行调试版) 自动化编译全部圆满成功！"

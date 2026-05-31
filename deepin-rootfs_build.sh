@@ -34,7 +34,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 ROOTFS_IMG="deepin25_1_0_desktop_${TIMESTAMP}.img"
 
 echo "=========================================="
-echo "⏳ 开始构建最前沿版 Deepin 25.1.0 RootFS"
+echo "⏳ 开始构建Deepin 25.1.0 RootFS"
 echo "内核版本: $KERNEL"
 echo "目标分支: $DEBIAN_SUITE"
 echo "=========================================="

@@ -21,7 +21,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Install Tools (sparse & ext4 utils)
-        run: sudo apt-update && sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs p7zip-full
+        run: sudo apt update && sudo apt-get install -y android-sdk-libsparse-utils e2fsprogs p7zip-full
 
       - name: 🔨 Build NixOS Tarball
         id: build_nix

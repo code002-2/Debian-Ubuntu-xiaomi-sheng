@@ -4,9 +4,10 @@ set -e
 IMAGE_SIZE="8G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
-# 🎯 核心修改：锁定 Deepin 25.1.0 最新代号 crimson，直连官方主源
-DEBIAN_SUITE="crimson"
-DEBIAN_MIRROR="https://community-packages.deepin.com/deepin/"
+# 🎯 终极修复：直接锁定 Deepin 官方的新版滚动底座 beige
+DEBIAN_SUITE="beige"
+# ⚠️ 注意 URL 最后的 /beige/，这是 Deepin 新版软件源的特殊强制结构
+DEBIAN_MIRROR="https://community-packages.deepin.com/beige/"
 
 usage() {
     echo "用法: $0 <distro_name> <kernel_version>"
@@ -22,19 +23,13 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# 🛡️ 智能检测防御：如果 Deepin 官方主源还在调整 25.1 的 Release 结构，自动切回滚动核心 beige
-if curl -sI "${DEBIAN_MIRROR}dists/${DEBIAN_SUITE}/Release" | grep -q "404 Not Found"; then
-    echo "⚠️ 官方主源 crimson (Deepin 25) 索引维护中，平滑切入 beige 分支获取 25.1 滚动更新..."
-    DEBIAN_SUITE="beige"
-fi
-
 DISTRO=$1
 KERNEL=$2
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 ROOTFS_IMG="deepin25_1_0_desktop_${TIMESTAMP}.img"
 
 echo "=========================================="
-echo "⏳ 开始构建Deepin 25.1.0 RootFS"
+echo "⏳ 开始构建最前沿版 Deepin 25.1.0 RootFS"
 echo "内核版本: $KERNEL"
 echo "目标分支: $DEBIAN_SUITE"
 echo "=========================================="
@@ -65,7 +60,7 @@ printf "deb [trusted=yes] %s %s main commercial community\n" "$DEBIAN_MIRROR" "$
 cp /etc/resolv.conf rootdir/etc/
 chroot rootdir apt update
 
-# 安装定制的 7.0 高通内核与驱动包，并自动修复依赖
+# 安装定制的高通内核与驱动包，并自动修复依赖
 if ls *.deb 1> /dev/null 2>&1; then
     cp *.deb rootdir/tmp/
     chroot rootdir bash -c "apt install -y /tmp/*.deb || apt-get install -f -y"
@@ -84,7 +79,7 @@ chroot rootdir locale-gen en_US.UTF-8
 chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
 echo "deepin-sheng" > rootdir/etc/hostname
 
-# 安装 Deepin 核心桌面包 (dde 包含了控制中心、文件管理器等全家桶)
+# 安装 Deepin 核心桌面包 (dde 包含了最新的 25 控制中心、文件管理器等)
 chroot rootdir apt install -y --no-install-recommends dde lightdm
 
 # 创建普通用户 (luser / luser)
@@ -135,4 +130,4 @@ echo "🗜️ 正在生成最终 7z 压缩包..."
 7z a "deepin25_1_0_desktop_${TIMESTAMP}.7z" "$ROOTFS_IMG"
 rm -f "$ROOTFS_IMG"
 
-echo "🎉 Deepin 25.1.0 自动化编译全部圆满成功！"
+echo "🎉 Deepin 25/23 自动化编译全部圆满成功！"

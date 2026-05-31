@@ -87,7 +87,11 @@ let
 in
 {
   hardware.firmware = [ shengFirmwareAndModules ];
-  boot.extraModulePackages = [ shengFirmwareAndModules ];
+  
+  # ✨ 解决内核版本冲突的核心修改：强制剥夺系统默认内核的控制权
+  system.modulesTree = lib.mkForce [ shengFirmwareAndModules ];
+  boot.initrd.includeDefaultModules = false;
+  boot.initrd.availableKernelModules = lib.mkForce [ ];
 
   fileSystems."/" = {
     device = "/dev/disk/by-partlabel/linux";

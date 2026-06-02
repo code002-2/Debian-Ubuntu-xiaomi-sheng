@@ -86,6 +86,6 @@
 
 感谢所有社区贡献者的测试与文件提供。
 
-感谢https://github.com/ianchb的MIPPS快充补丁
+感谢https://github.com/ianchb 的MIPPS快充补丁
 
 **谨慎操作 – 祝使用愉快！**

@@ -56,7 +56,6 @@ chroot rootdir dnf -y install git gcc make kernel-headers
 
 echo "📦 正在更新 Fedora 系统并安装基础组件..."
 # 这一步仅仅精准排除 kernel-core（这是触发 dracut 报错的唯一元凶）
-# ✨ 修复点：加入了 qrtr 安装，确保稍后的守护进程有可执行文件！
 chroot rootdir dnf -y update --exclude=kernel-core
 chroot rootdir dnf -y install --exclude=kernel-core \
     systemd sudo vim wget curl tar xz pciutils findutils \
@@ -73,12 +72,29 @@ if ls *.deb 1> /dev/null 2>&1; then
         dpkg-deb --fsys-tarfile "$pkg" | tar -x --keep-directory-symlink -C rootdir/
     done
     
-    echo "   正在更新内核模块依赖..."
-    # ✨ 修复点：精准抓取最新植入的 7.1 内核目录，避免抓到老的
+    echo "   正在更新内核模块依赖并生成引导镜像..."
     KERNEL_MODULE_DIR=$(ls -1t rootdir/usr/lib/modules/ | head -n 1)
     if [ -n "$KERNEL_MODULE_DIR" ]; then
         echo "   ✅ 动态识别到真实内核版本目录: $KERNEL_MODULE_DIR"
         chroot rootdir /usr/sbin/depmod -a "$KERNEL_MODULE_DIR" || true
+        
+        # ==========================================
+        # 🚨 核心修复：为 Fedora 强制生成 Initramfs 并重命名内核
+        # ==========================================
+        echo "   ⚙️ 正在安装 dracut 并生成初始内存盘 (Initramfs)..."
+        chroot rootdir dnf -y install dracut
+        
+        # 强制用新内核的模块生成通用的 Initramfs (-N 表示禁用仅限当前主机的优化，生成最泛用的镜像)
+        chroot rootdir dracut -N --kver "$KERNEL_MODULE_DIR" --force "/boot/initramfs-linux.img"
+        
+        # 将 Debian 格式的 vmlinuz 内核重命名为 ARM64 标准的 Image
+        if [ -f "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
+            echo "   🔄 正在适配 Bootloader 内核命名..."
+            cp "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" "rootdir/boot/Image"
+            cp "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" "rootdir/boot/vmlinuz-linux"
+        fi
+        echo "   ✅ 内核引导镜像与 Initramfs 彻底生成完毕！"
+        # ==========================================
     fi
 fi
 
@@ -136,8 +152,6 @@ if [ -f "$FW_DIR/board-2.bin" ]; then
     cp "$FW_DIR/board-2.bin" "$FW_DIR/board.bin"
     echo "✅ board.bin 伪装成功！"
 fi
-
-# (已彻底移除导致黑屏死机的强制内核版本改名代码)
 
 echo "⚙️ 正在创建 qrtr 守护进程开机自启服务..."
 cat << 'EOF' > rootdir/etc/systemd/system/qrtr-force.service

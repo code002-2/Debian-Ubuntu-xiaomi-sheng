@@ -64,11 +64,11 @@ echo "🧹 正在清理 Arch 自带的内核与固件，为您提供的 Release 
 chroot rootdir pacman -Rdd --noconfirm linux-aarch64 linux-firmware || true
 
 echo "📦 正在更新系统并安装基础组件..."
-# ✨ [修改点1] 追加了 qrtr 和 dialog 组件
 chroot rootdir pacman -Syu --noconfirm base kmod glibc systemd sudo vim wget curl networkmanager wpa_supplicant dbus qrtr dialog
 
-echo "🖥️ 正在安装 GNOME 桌面环境及依赖..."
-chroot rootdir pacman -S --noconfirm gnome gdm
+# ✨ [修改点]：弃用臃肿且依赖损坏的 gnome 元包，改用精准注入的核心组件
+echo "🖥️ 正在安装 GNOME 桌面环境及依赖 (精简模式)..."
+chroot rootdir pacman -S --noconfirm --needed gdm gnome-shell gnome-control-center gnome-tweaks nautilus gnome-console xdg-user-dirs-gtk
 
 echo "🔨 正在扫描并注入本地内核与系统固件包 (鸠占鹊巢：覆盖官方组件)..."
 

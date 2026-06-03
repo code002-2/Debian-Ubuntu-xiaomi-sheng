@@ -82,7 +82,7 @@ jobs:
       - name: Download kernel and system bundles
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
-          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.1"; fi
           
           gh release download "kernel-bundle-${KERNEL_VER}" \
             --repo "${{ github.repository }}" --clobber || true

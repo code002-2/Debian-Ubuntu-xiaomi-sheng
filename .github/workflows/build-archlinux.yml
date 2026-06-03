@@ -77,7 +77,7 @@ jobs:
       - name: Download kernel and system bundles
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
-          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.1"; fi
           
           # 从 GitHub Release 拉取内核和固件包
           gh release download "kernel-bundle-${KERNEL_VER}" \

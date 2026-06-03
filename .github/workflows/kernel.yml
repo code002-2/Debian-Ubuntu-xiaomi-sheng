@@ -88,9 +88,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: kernel-${{ github.event.inputs.kernel_version || '7.1' }}
-          name: "🔥 Kernel v${{ github.event.inputs.kernel_version || '7.1' }}"
+          name: "Kernel v${{ github.event.inputs.kernel_version || '7.1' }}"
           body: |
-            🧩 **骁龙 8 Gen 2 通用内核 v${{ github.event.inputs.kernel_version || '7.1' }}**
+            **小米Pad6spro通用内核 v${{ github.event.inputs.kernel_version || '7.1' }}**
             
           draft: false
           prerelease: false

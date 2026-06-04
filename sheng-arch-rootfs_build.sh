@@ -1,197 +1,188 @@
 #!/bin/bash
 set -e
 
+# ==========================================
+# ⚙️ 全局配置与参数检查
+# ==========================================
 IMAGE_SIZE="8G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 ALARM_MIRROR="http://mirror.archlinuxarm.org"
 
 usage() {
-    echo "用法: $0 <distro_name> <kernel_version>"
+    echo "用法: $0 <distro_name> <kernel_version> [desktop_environment]"
+    echo "示例: $0 arch 7.1.0-rc6 kde"
+    echo "      $0 arch 7.1.0-rc6 gnome"
+    echo "      $0 arch 7.1.0-rc6 all"
     exit 1
 }
 
-if [ $# -ne 2 ]; then
-    usage
-fi
-
-if [ "$(id -u)" -ne 0 ]; then
-    echo "请使用root权限运行"
-    exit 1
-fi
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then usage; fi
+if [ "$(id -u)" -ne 0 ]; then echo "❌ 必须使用 root 权限运行此脚本！"; exit 1; fi
 
 DISTRO=$1
 KERNEL=$2
+TARGET_DE=${3:-gnome}
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-ROOTFS_IMG="archlinux_desktop_${TIMESTAMP}.img"
 
-echo "=========================================="
-echo "⏳ 开始构建纯净桌面版 Arch Linux ARM RootFS"
-echo "内核版本: $KERNEL"
-echo "=========================================="
+# 解析需要构建的桌面版本
+DESKTOPS=()
+if [ "$TARGET_DE" = "all" ]; then
+    DESKTOPS=("gnome" "kde")
+elif [[ "$TARGET_DE" =~ ^(gnome|kde)$ ]]; then
+    DESKTOPS=("$TARGET_DE")
+else
+    echo "❌ 不支持的选项: $TARGET_DE (仅支持 gnome, kde, all)"
+    exit 1
+fi
 
-rm -rf rootdir || true
-truncate -s $IMAGE_SIZE "$ROOTFS_IMG"
-mkfs.ext4 "$ROOTFS_IMG"
-mkdir rootdir
-mount -o loop "$ROOTFS_IMG" rootdir
+# ==========================================
+# 🛡️ 容错防线：无论发生什么，确保安全卸载
+# ==========================================
+cleanup_mounts() {
+    echo "🧹 正在执行挂载点安全清理机制..."
+    fuser -k -9 -m rootdir 2>/dev/null || true
+    sleep 2
+    umount -l rootdir/dev/pts 2>/dev/null || true
+    umount -l rootdir/dev 2>/dev/null || true
+    umount -l rootdir/proc 2>/dev/null || true
+    umount -l rootdir/sys 2>/dev/null || true
+    umount -l rootdir 2>/dev/null || true
+    rm -rf rootdir
+}
+trap cleanup_mounts EXIT ERR INT TERM
 
-echo "⬇️ 正在下载 Arch Linux ARM (aarch64) 基础包..."
-wget -q http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
-bsdtar -xpf ArchLinuxARM-aarch64-latest.tar.gz -C rootdir
-rm ArchLinuxARM-aarch64-latest.tar.gz
+# ==========================================
+# 📦 核心函数区
+# ==========================================
+setup_base_env() {
+    echo "⬇️ [阶段 1] 初始化磁盘与 Arch 基础系统 (${DE^^})..."
+    rm -f "$ROOTFS_IMG"
+    truncate -s $IMAGE_SIZE "$ROOTFS_IMG"
+    mkfs.ext4 -O ^metadata_csum "$ROOTFS_IMG" 
+    mkdir -p rootdir
+    mount -o loop "$ROOTFS_IMG" rootdir
 
-mount --bind /dev rootdir/dev
-mount --bind /dev/pts rootdir/dev/pts
-mount -t proc proc rootdir/proc
-mount -t sysfs sys rootdir/sys
-
-# 强制写入公共 DNS
-rm -f rootdir/etc/resolv.conf
-echo "nameserver 8.8.8.8" > rootdir/etc/resolv.conf
-echo "nameserver 1.1.1.1" >> rootdir/etc/resolv.conf
-
-# 配置 Arch Linux ARM 全球镜像源
-echo "Server = $ALARM_MIRROR/\$arch/\$repo" > rootdir/etc/pacman.d/mirrorlist
-
-# 初始化 pacman 密钥环
-chroot rootdir pacman-key --init
-chroot rootdir pacman-key --populate archlinuxarm
-
-# 禁用 pacman 的下载超时机制
-sed -i 's/^#DisableDownloadTimeout/DisableDownloadTimeout/' rootdir/etc/pacman.conf
-
-echo "🧹 正在清理 Arch 自带的内核与固件，为您提供的 Release 包保留空间..."
-chroot rootdir pacman -Rdd --noconfirm linux-aarch64 linux-firmware || true
-
-echo "📦 正在更新系统并安装基础组件..."
-chroot rootdir pacman -Syu --noconfirm base kmod glibc systemd sudo vim wget curl networkmanager wpa_supplicant dbus qrtr dialog
-
-echo "🖥️ 正在安装 GNOME .."
-chroot rootdir bash -c "pacman -Sgq gnome | grep -vE 'gnome-books|gnome-boxes' | pacman -S --noconfirm --needed - gdm gnome-tweaks"
-
-echo "🔨 正在扫描并注入本地内核与系统固件包 (鸠占鹊巢：覆盖官方组件)..."
-
-if ls *.deb 1> /dev/null 2>&1; then
-    for pkg in *.deb; do
-        echo "   -> 正在提取并覆盖注入 $pkg ..."
-        dpkg-deb --fsys-tarfile "$pkg" | tar -x --keep-directory-symlink -C rootdir/
-    done
-    
-    echo "   正在更新内核模块依赖并生成引导镜像..."
-    KERNEL_MODULE_DIR=$(ls -1t rootdir/usr/lib/modules/ | head -n 1)
-    if [ -n "$KERNEL_MODULE_DIR" ]; then
-        echo "   ✅ 动态识别到真实内核版本目录: $KERNEL_MODULE_DIR"
-        chroot rootdir /usr/bin/depmod -a "$KERNEL_MODULE_DIR" || true
-        
-        # ==========================================
-        # 🚨 核心修复：为 Arch 强制生成 Initramfs 并重命名内核
-        # ==========================================
-        echo "   ⚙️ 正在安装 mkinitcpio 并生成初始内存盘 (Initramfs)..."
-        chroot rootdir pacman -S --noconfirm --needed mkinitcpio
-        
-        # 🔥 史诗级除雷：斩杀 autodetect 钩子！
-        # 强制删除 mkinitcpio.conf 中的 autodetect 单词，防止云端打包时丢弃高通驱动！
-        sed -i 's/autodetect //g' rootdir/etc/mkinitcpio.conf
-        sed -i 's/autodetect//g' rootdir/etc/mkinitcpio.conf
-        
-        # 强制用新内核的模块生成 Arch 标准的引导镜像（包含全量驱动）
-        chroot rootdir mkinitcpio -k "$KERNEL_MODULE_DIR" -g "/boot/initramfs-linux.img"
-        
-        # 将 Debian 格式的 vmlinuz 内核重命名为 ARM64 标准的 Image
-        if [ -f "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
-            echo "   🔄 正在适配 Bootloader 内核命名..."
-            cp "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" "rootdir/boot/Image"
-            cp "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" "rootdir/boot/vmlinuz-linux"
-        fi
-        echo "   ✅ 内核引导镜像与 Initramfs 彻底生成完毕！"
-        # ==========================================
-        
-    else
-        echo "   ⚠️ 未能在 /usr/lib/modules/ 中找到内核模块目录。"
+    # 如果同目录下没有基础包则下载，避免 all 模式重复下载
+    if [ ! -f "ArchLinuxARM-aarch64-latest.tar.gz" ]; then
+        wget -q http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
     fi
-fi
+    bsdtar -xpf ArchLinuxARM-aarch64-latest.tar.gz -C rootdir
 
-if ls *.tar.gz 1> /dev/null 2>&1; then
-    for tarball in *.tar.gz; do
-        echo "   -> 正在解压系统包 $tarball ..."
-        tar -xz --keep-directory-symlink -f "$tarball" -C rootdir/
-    done
-fi
+    mount --bind /dev rootdir/dev
+    mount --bind /dev/pts rootdir/dev/pts
+    mount -t proc proc rootdir/proc
+    mount -t sysfs sys rootdir/sys
 
-if [ -d "rootdir/usr/lib/firmware" ]; then
-    chmod -R 755 rootdir/usr/lib/firmware/ || true
-fi
+    echo "nameserver 8.8.8.8" > rootdir/etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> rootdir/etc/resolv.conf
+    echo "Server = $ALARM_MIRROR/\$arch/\$repo" > rootdir/etc/pacman.d/mirrorlist
 
-echo 'en_US.UTF-8 UTF-8' > rootdir/etc/locale.gen
-chroot rootdir /usr/bin/locale-gen
-echo 'LANG=en_US.UTF-8' > rootdir/etc/locale.conf
+    chroot rootdir pacman-key --init
+    chroot rootdir pacman-key --populate archlinuxarm
+    sed -i 's/^#DisableDownloadTimeout/DisableDownloadTimeout/' rootdir/etc/pacman.conf
 
-chroot rootdir bash -c "echo 'root:1234' | chpasswd"
-echo "arch-sheng" > rootdir/etc/hostname
+    chroot rootdir pacman -Rdd --noconfirm linux-aarch64 linux-firmware || true
+    chroot rootdir pacman -Syu --noconfirm base kmod glibc systemd sudo vim wget curl networkmanager wpa_supplicant dbus qrtr dialog
+}
 
-chroot rootdir useradd -m -s /bin/bash luser
-chroot rootdir bash -c "echo 'luser:luser' | chpasswd"
-chroot rootdir usermod -aG wheel,audio,video,input luser
+install_desktop_env() {
+    echo "🖥️ [阶段 2] 正在安装 ${DE^^} 桌面环境..."
+    if [ "$DE" = "gnome" ]; then
+        chroot rootdir bash -c "pacman -Sgq gnome | grep -vE 'gnome-books|gnome-boxes' | pacman -S --noconfirm --needed - gdm gnome-tweaks"
+        mkdir -p rootdir/etc/gdm
+        printf "[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=luser\n" > rootdir/etc/gdm/custom.conf
+        chroot rootdir systemctl enable gdm
+    elif [ "$DE" = "kde" ]; then
+        chroot rootdir pacman -S --noconfirm --needed plasma-meta sddm konsole dolphin ark gwenview
+        mkdir -p rootdir/etc/sddm.conf.d
+        printf "[Autologin]\nUser=luser\nSession=plasma\n" > rootdir/etc/sddm.conf.d/autologin.conf
+        chroot rootdir systemctl enable sddm
+    fi
+    chroot rootdir systemctl set-default graphical.target
+}
 
-echo "%wheel ALL=(ALL:ALL) ALL" > rootdir/etc/sudoers.d/wheel
-chmod 440 rootdir/etc/sudoers.d/wheel
+inject_kernel_and_firmware() {
+    echo "🔨 [阶段 3] 注入本地内核与生成 Initramfs..."
+    if ls *.deb 1> /dev/null 2>&1; then
+        for pkg in *.deb; do
+            echo "   -> 注入包: $pkg"
+            dpkg-deb --fsys-tarfile "$pkg" | tar -x --keep-directory-symlink -C rootdir/
+        done
+        
+        KERNEL_MODULE_DIR=$(ls -1t rootdir/usr/lib/modules/ | head -n 1)
+        if [ -n "$KERNEL_MODULE_DIR" ]; then
+            chroot rootdir /usr/bin/depmod -a "$KERNEL_MODULE_DIR" || true
+            chroot rootdir pacman -S --noconfirm --needed mkinitcpio
+            sed -i 's/autodetect //g' rootdir/etc/mkinitcpio.conf
+            sed -i 's/autodetect//g' rootdir/etc/mkinitcpio.conf
+            chroot rootdir mkinitcpio -k "$KERNEL_MODULE_DIR" -g "/boot/initramfs-linux.img"
+            if [ -f "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
+                cp "rootdir/boot/vmlinuz-$KERNEL_MODULE_DIR" "rootdir/boot/Image"
+            fi
+        fi
+    else
+        echo "⚠️ 警告：当前目录下未找到任何 .deb 内核包！"
+    fi
+}
 
-echo "🩹 正在针对高通 SM8550 (Sheng) 注入底层自愈补丁..."
-ln -sf /usr/lib/systemd/system/getty@.service rootdir/etc/systemd/system/getty.target.wants/getty@ttyMSM0.service
+apply_system_quirks() {
+    echo "🩹 [阶段 4] 配置硬件补丁与账户权限..."
+    echo 'en_US.UTF-8 UTF-8' > rootdir/etc/locale.gen
+    chroot rootdir /usr/bin/locale-gen
+    echo 'LANG=en_US.UTF-8' > rootdir/etc/locale.conf
+    echo "arch-${DE}-sheng" > rootdir/etc/hostname
 
-chroot rootdir systemctl enable systemd-resolved
-chroot rootdir systemctl enable NetworkManager
-ln -sf /run/systemd/resolve/stub-resolv.conf rootdir/etc/resolv.conf
+    chroot rootdir bash -c "echo 'root:1234' | chpasswd"
+    chroot rootdir useradd -m -s /bin/bash luser || true
+    chroot rootdir bash -c "echo 'luser:luser' | chpasswd"
+    chroot rootdir usermod -aG wheel,audio,video,input luser
+    echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" > rootdir/etc/sudoers.d/wheel
+    chmod 440 rootdir/etc/sudoers.d/wheel
 
-mkdir -p rootdir/etc/udev/rules.d/
-printf 'ENV{ID_INPUT_TOUCHSCREEN}=="1", ENV{LIBINPUT_CALIBRATION_MATRIX}="1 0 0 0 1 0 0 0 1"\n' > rootdir/etc/udev/rules.d/99-touchscreen-sheng.rules
+    ln -sf /usr/lib/systemd/system/getty@.service rootdir/etc/systemd/system/getty.target.wants/getty@ttyMSM0.service
+    chroot rootdir systemctl enable systemd-resolved NetworkManager qrtr-ns
+    ln -sf /run/systemd/resolve/stub-resolv.conf rootdir/etc/resolv.conf
 
-mkdir -p rootdir/etc/gdm
-printf "[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=luser\n" > rootdir/etc/gdm/custom.conf
-chroot rootdir systemctl enable gdm
+    mkdir -p rootdir/etc/udev/rules.d/
+    printf 'ENV{ID_INPUT_TOUCHSCREEN}=="1", ENV{LIBINPUT_CALIBRATION_MATRIX}="1 0 0 0 1 0 0 0 1"\n' > rootdir/etc/udev/rules.d/99-touchscreen-sheng.rules
+    
+    FW_DIR="rootdir/usr/lib/firmware/ath12k/WCN7850/hw2.0"
+    if [ -f "$FW_DIR/board-2.bin" ]; then cp "$FW_DIR/board-2.bin" "$FW_DIR/board.bin"; fi
 
-chroot rootdir systemctl set-default graphical.target
+    printf "PARTLABEL=linux / ext4 defaults,noatime,errors=remount-ro 0 1\n" > rootdir/etc/fstab
+    chroot rootdir pacman -Scc --noconfirm
+}
+
+finalize_and_pack() {
+    echo "🗜️ [阶段 5] 正在打包生成镜像..."
+    cleanup_mounts 
+    
+    tune2fs -U $FILESYSTEM_UUID "$ROOTFS_IMG"
+    SPARSE_IMG="sparse_${ROOTFS_IMG}"
+    img2simg "$ROOTFS_IMG" "$SPARSE_IMG"
+    7z a "${ROOTFS_IMG%.img}.7z" "$SPARSE_IMG"
+    rm -f "$ROOTFS_IMG" "$SPARSE_IMG"
+    
+    echo "🎉 ${DE^^} 版本构建彻底圆满成功！产物: ${ROOTFS_IMG%.img}.7z"
+}
 
 # ==========================================
-# ✨ 高通 WiFi 专属一键自动修复魔法
+# 🚀 执行构建
 # ==========================================
-echo "⚙️ 正在预配置高通 WiFi 固件修复与驱动适配..."
-FW_DIR="rootdir/usr/lib/firmware/ath12k/WCN7850/hw2.0"
-if [ -f "$FW_DIR/board-2.bin" ]; then
-    cp "$FW_DIR/board-2.bin" "$FW_DIR/board.bin"
-    echo "✅ board.bin 伪装成功！"
-fi
+for DE in "${DESKTOPS[@]}"; do
+    ROOTFS_IMG="${DISTRO}_${DE}_${TIMESTAMP}.img"
+    echo ""
+    echo "=========================================="
+    echo "🌟 开始执行 -> 桌面: ${DE^^} | 目标: $ROOTFS_IMG"
+    echo "=========================================="
+    
+    setup_base_env
+    install_desktop_env
+    inject_kernel_and_firmware
+    apply_system_quirks
+    finalize_and_pack
+done
 
-chroot rootdir systemctl enable qrtr-ns || true
-echo "✅ 高通 QMI 通讯服务已设置为开机自启！"
-# ==========================================
-
-printf "PARTLABEL=linux / ext4 defaults,noatime,errors=remount-ro 0 1\n" > rootdir/etc/fstab
-
-chroot rootdir pacman -Scc --noconfirm
-
-echo "🧹 正在清理后台遗留进程并安全卸载挂载点..."
-fuser -k -9 -m rootdir || true
-sleep 2
-
-umount -l rootdir/dev/pts || true
-umount -l rootdir/dev || true
-umount -l rootdir/proc || true
-umount -l rootdir/sys || true
-umount -l rootdir || true
-sleep 2
-rm -rf rootdir
-
-tune2fs -U $FILESYSTEM_UUID "$ROOTFS_IMG"
-
-echo "✅ 原始镜像生成完成: $ROOTFS_IMG"
-echo "🔄 正在将其转换为 Fastboot 专用的稀疏镜像 (Sparse Image)..."
-SPARSE_IMG="sparse_${ROOTFS_IMG}"
-img2simg "$ROOTFS_IMG" "$SPARSE_IMG"
-
-echo "🗜️ 正在生成最终 7z 压缩包..."
-7z a "archlinux_desktop_${TIMESTAMP}.7z" "$SPARSE_IMG"
-
-rm -f "$ROOTFS_IMG" "$SPARSE_IMG"
-
-echo "🎉 Fastboot 专用精简桌面版 Arch Linux ARM 自动化编译全部圆满成功！"
+# 删除复用的缓存包
+rm -f ArchLinuxARM-aarch64-latest.tar.gz
+echo "✅ 所有指定的桌面环境构建任务已全部结束！"

@@ -52,12 +52,13 @@ jobs:
           EOF
           echo "配置文件已成功写入到 batocera/configs/batocera-xiaomi-sheng_defconfig"
 
-      - name: "编译 Batocera RootFS"
+      - name: 第一阶段：仅编译 Batocera RootFS"
         run: |
           cd batocera
-          ls -la configs/batocera-xiaomi-sheng_defconfig
           
-          make defconfig BR2_DEFCONFIG=configs/batocera-xiaomi-sheng_defconfig
+          cp configs/batocera-xiaomi-sheng_defconfig .config
+          
+          make olddefconfig
           
           make -j$(nproc)
 

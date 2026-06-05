@@ -1,12 +1,30 @@
-name: 🌀 Build Debian 13 Desktop (Gnome)
+name: 🌀 Build Debian 13 Desktop
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: '内核版本 (如 7.0)'
+        description: '内核版本 (如 7.1)'
         required: true
-        default: '7.0'
+        default: '7.1'
+      boot_mode:
+        description: '选择启动模式 (双启/单启)'
+        required: true
+        type: choice
+        options:
+          - all
+          - dual
+          - single
+        default: 'all'
+      desktop_env:
+        description: '选择桌面环境 (GNOME/KDE)'
+        required: true
+        type: choice
+        options:
+          - all
+          - gnome
+          - kde
+        default: 'all'
       skip_release:
         description: '跳过创建GitHub Release'
         type: boolean
@@ -28,7 +46,8 @@ jobs:
       - name: Generate release tag
         id: tag
         run: |
-          TAG="debian13-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
+          DE_SUFFIX="${{ github.event.inputs.desktop_env || 'gnome' }}"
+          TAG="debian13-${DE_SUFFIX}-$(date -u '+%Y%m%d')-${GITHUB_SHA::8}"
           echo "release_tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
@@ -36,9 +55,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: "Debian 13 Desktop - ${{ steps.tag.outputs.release_tag }}"
+          name: "Debian 13 Desktop (${{ github.event.inputs.desktop_env || 'all' }}) - ${{ steps.tag.outputs.release_tag }}"
           body: |
-            🌀 Debian 13 (Trixie) Desktop Gnome For SM8550
+            🌀 Debian 13 (Trixie) Desktop For SM8550
             
             ---
             
@@ -46,8 +65,9 @@ jobs:
             | 项目 | 详情 |
             |------|------|
             | 架构 | ARM64 (arm64) |
-            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.0' }} |
-            | 桌面环境 | GNOME (task-gnome-desktop) |
+            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.1' }} |
+            | 桌面环境 | ${{ github.event.inputs.desktop_env || 'all' }} |
+            | 启动模式 | ${{ github.event.inputs.boot_mode || 'all' }} |
             
             ---
             
@@ -58,7 +78,7 @@ jobs:
             ---
             
             ### 📦 镜像文件
-            构建完成后将出现在下方附件中。
+            构建完成后将出现在下方附件中。解压后请直接使用 fastboot flash 刷入对应分区。
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -78,10 +98,10 @@ jobs:
       - name: Download kernel bundle
         run: |
           KERNEL_VER="${{ github.event.inputs.kernel_version }}"
-          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.0"; fi
+          if [ -z "$KERNEL_VER" ]; then KERNEL_VER="7.1"; fi
           
           gh release download "kernel-bundle-${KERNEL_VER}" \
-            --pattern "*.deb" --repo "${{ github.repository }}" --clobber
+            --pattern "*.deb" --repo "${{ github.repository }}" --clobber || true
           ls -la *.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,18 +110,18 @@ jobs:
         id: build
         run: |
           chmod +x sheng-rootfs_build.sh
-          # 传入你的参数执行构建
-          sudo bash sheng-rootfs_build.sh debian-desktop "${{ github.event.inputs.kernel_version || '7.1' }}"
+          # 🚨 传入四个核心参数：系统版本、内核版本、启动模式、桌面环境
+          sudo bash sheng-rootfs_build.sh debian-desktop "${{ github.event.inputs.kernel_version || '7.1' }}" "${{ github.event.inputs.boot_mode || 'all' }}" "${{ github.event.inputs.desktop_env || 'all' }}"
           
-          # 🚨 核心修复 1：统计到底生成了几个 7z 包 (dual和single可能会生成两个)
+          # 统计到底生成了几个 7z 包
           PKG_COUNT=$(ls -1 *.7z 2>/dev/null | wc -l)
           echo "pkg_count=$PKG_COUNT" >> $GITHUB_OUTPUT
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: debian-desktop-gnome
-          # 🚨 核心修复 2：直接用通配符捕获目录下所有的 .7z 文件，绝对不会抓空！
+          name: debian-desktop-${{ github.event.inputs.desktop_env || 'all' }}
+          # 直接用通配符捕获目录下所有的 .7z 文件
           path: "*.7z"
           retention-days: 7
 
@@ -109,7 +129,6 @@ jobs:
         if: ${{ !github.event.inputs.skip_release && steps.build.outputs.pkg_count > 0 }}
         uses: softprops/action-gh-release@v1
         with:
-          # 确保这里用的 tag_name 在前面的步骤里生成好了
           tag_name: ${{ needs.prepare-release.outputs.release_tag }}
           files: "*.7z"
         env:

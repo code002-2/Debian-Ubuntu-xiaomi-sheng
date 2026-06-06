@@ -46,16 +46,12 @@ export XBPS_ARCH=aarch64
 chroot rootdir xbps-install -Syu || true 
 chroot rootdir xbps-install -y xbps
 
-# 🚨 核心差异：只装 xorg-server, mesa 驱动和 retroarch，不要任何桌面！
 chroot rootdir xbps-install -y \
-    sudo nano wget curl tar xz pciutils findutils \
+    sudo nano wget curl pciutils findutils \
     NetworkManager wpa_supplicant dbus kmod dracut \
     xorg-minimal xorg-server xinit mesa-dri \
-    retroarch retroarch-assets libretro-core-info
+    retroarch
 
-# ========================================================
-# 🔨 强行注入 Deb 内核并生成 dracut 引导
-# ==========================================
 echo "🔨 正在解包注入系统内核与固件..."
 if ls *.deb 1> /dev/null 2>&1; then
     for pkg in *.deb; do
@@ -79,9 +75,7 @@ if ls *.tar.gz 1> /dev/null 2>&1; then
     done
 fi
 
-# ========================================================
-# ⚙️ 用户配置与高通自愈补丁
-# ==========================================
+
 chroot rootdir bash -c "echo 'root:1234' | chpasswd"
 echo "void-retro-sheng" > rootdir/etc/hostname
 

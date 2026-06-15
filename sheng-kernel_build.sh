@@ -76,7 +76,7 @@ echo "🔨 开始极速编译..."
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 Image
 
 # 编译指定的设备树 (只写相对路径)
-make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 qcom/sm8550-xiaomi-sheng.dtb
+make ARCH=arm64 LLVM=1 DTC_FLAGS="-f" qcom/sm8550-xiaomi-sheng.dtb
 
 # 编译模块
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 modules

@@ -58,11 +58,14 @@ sed -i '/hamoa-iot-evk.dtb/d' arch/arm64/boot/dts/qcom/Makefile || true
 # 4. 极速编译内核
 # ==========================================
 echo "🔨 开始使用 LLVM Clang 编译内核..."
+
+# ⬇️ 新加这一行：自动静默填补所有 7.1 新增配置的默认值，彻底堵住提问卡死！
+make olddefconfig ARCH=arm64
+
+# 下面是你原本的编译命令，保持不变
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1
 _kernel_version="$(make kernelrelease -s)"
 
-# 更新 DEBIAN/control 中的版本号
-sed -i "s/Version:.*/Version: ${_kernel_version}/" ../linux-xiaomi-sheng/DEBIAN/control
 
 # ==========================================
 # 5. 提取产物并注入打包目录

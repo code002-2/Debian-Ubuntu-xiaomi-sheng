@@ -24,7 +24,6 @@ export STRIP="llvm-strip"
 # ==========================================
 # 2. 拉取内核源码 (默认使用 sheng-mainline 分支)
 # ==========================================
-# 如果你想换回 sheng-7.0 分支，直接修改下面这行的 --branch 参数即可
 git clone https://github.com/code002-2/sm8550-mainline.git --branch sheng-mainline --depth 1 linux
 cd linux
 
@@ -32,7 +31,7 @@ cd linux
 # 3. 智能定位并应用内核配置文件 (.config)
 # ==========================================
 echo "⚙️ 正在智能定位并配置内核..."
-CONFIG_PATH=$(find "$GITHUB_WORKSPACE" ../ -maxdepth 2 -name "config*.aarch64" 2>/dev/null | head -n 1)
+CONFIG_PATH=$(find "$GITHUB_WORKSPACE" ../ -maxdepth 2 -name "config*.aarch64*" 2>/dev/null | head -n 1)
 
 if [ -n "$CONFIG_PATH" ]; then
     echo "✅ 成功找到并复制配置文件: $CONFIG_PATH"
@@ -41,6 +40,19 @@ else
     echo "⚠️ 未找到动态配置文件，尝试使用后备默认配置..."
     cp ../config-postmarketos-qcom-sm8550.aarch64 .config || { echo "❌ 致命错误: 找不到任何配置文件！"; exit 1; }
 fi
+
+# ==========================================
+# 🚀 3.5 暴力修复区 (解决 7.1 卡死与节点报错)
+# ==========================================
+echo "🛠️ 正在暴力修复 Config 文件以适配 7.1..."
+# 此时配置已经被复制到了 .config，我们直接改 .config
+sed -i 's/Linux\/arm64 7.0.0/Linux\/arm64 7.1.0/g' .config || true
+echo "# CONFIG_ACPI_APEI_GHES_NVIDIA is not set" >> .config
+echo "CONFIG_DRIVER_DEFERRED_PROBE_TIMEOUT=10" >> .config
+
+echo "🛠️ 正在剔除冲突的 hamoa 开发板设备树..."
+sed -i '/hamoa-iot-evk.dtb/d' arch/arm64/boot/dts/qcom/Makefile || true
+# ==========================================
 
 # ==========================================
 # 4. 极速编译内核
@@ -77,7 +89,6 @@ chmod +x ../mkbootimg
 # ==========================================
 # 6. 打包 Android 规范的 boot.img (包含全局防黑屏补丁)
 # ==========================================
-# 将 Image.gz 和设备树 (DTB) 拼接到一起
 cat arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb > Image.gz-dtb_sheng
 
 install -Dm644 Image.gz-dtb_sheng \
@@ -85,8 +96,6 @@ install -Dm644 Image.gz-dtb_sheng \
 
 mv Image.gz-dtb_sheng zImage_sheng
 
-# 🚨 核心神级修复：注入 rootwait 和 rw。
-# 无论你是启动 Arch、Ubuntu 还是 Fedora，都能防止闪存加载过慢导致的开机恐慌 (Kernel Panic)
 ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
 ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
 
@@ -106,16 +115,13 @@ cd ..
 # ==========================================
 echo "📦 正在拉取并构建固件与音频补丁包..."
 
-# 高通固件
 git clone https://github.com/map220v/sheng-firmware
 mkdir -p firmware-xiaomi-sheng/usr/lib/firmware
 cp -r sheng-firmware/* firmware-xiaomi-sheng/usr/lib/firmware/
 
-# 音频驱动 (ALSA)
 git clone https://github.com/alghiffaryfa19/alsa-sheng
 cp -r alsa-sheng/* alsa-xiaomi-sheng/
 
-# 最终生成所有的 Debian 包
 dpkg-deb --build --root-owner-group linux-xiaomi-sheng
 dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
 dpkg-deb --build --root-owner-group alsa-xiaomi-sheng

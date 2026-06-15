@@ -86,6 +86,7 @@ make ARCH=arm64 LLVM=1 DTC_FLAGS="-f" qcom/sm8550-xiaomi-sheng.dtb
 # 编译模块
 make -j$(nproc) ARCH=arm64 LLVM=1 modules
 
+
 # ==========================================
 # 5. 打包产物 (保持不变)
 # ==========================================
@@ -104,4 +105,18 @@ mv Image.gz-dtb_sheng zImage_sheng
 ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
 ../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
 
-echo "🎉 终极通用版内核打包圆满完成！"
+# ==========================================
+# 6. 打包固件与驱动
+# ==========================================
+# 退出 linux 源码目录，回到 GitHub Action 的根目录
+cd ..
+
+echo "📦 开始打包所有 deb 文件..."
+dpkg-deb --build --root-owner-group linux-xiaomi-sheng
+dpkg-deb --build --root-owner-group firmware-xiaomi-sheng
+dpkg-deb --build --root-owner-group alsa-xiaomi-sheng
+
+# 因为已经回到了根目录，现在系统能精准找到你上传的 sheng-devauth 了！
+dpkg-deb --build --root-owner-group sheng-devauth
+
+echo "🎉 所有任务圆满完成！恭喜你！"

@@ -47,7 +47,7 @@ sed -i '/ipq/d' arch/arm64/boot/dts/qcom/Makefile
 # ==========================================
 echo "⚙️ 正在应用配置并屏蔽 KVM 编译..."
 
-cp ../config-postmarketos-qcom-sm8550.aarch64.txt .config
+cp ../config-postmarketos-qcom-sm8550.aarch64 .config
 
 # 1. 禁用 KVM 配置，确保 Makefile 不会尝试去编译那些会导致重定义的文件
 {

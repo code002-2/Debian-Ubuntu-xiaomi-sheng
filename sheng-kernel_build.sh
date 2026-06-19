@@ -1,84 +1,69 @@
-#!/bin/bash
-set -e
+# 仅在未设置环境变量时配置ccache
+if [ -z "$CCACHE_DIR" ]; then
+    export CCACHE_DIR="/home/runner/.ccache"
+    export CCACHE_MAXSIZE="10G"
+    export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
+fi
 
-# ==========================================
-# 1. 编译环境配置
-# ==========================================
-export CCACHE_DIR="/home/runner/.ccache"
-export CCACHE_MAXSIZE="10G"
+# 确保ccache目录存在
 mkdir -p "$CCACHE_DIR"
+
+# 确保ccache优先使用clang
 export CC="ccache clang"
 export CXX="ccache clang++"
-export LLVM=1
-export ARCH=arm64
+export AR="llvm-ar"
+export NM="llvm-nm"
+export OBJCOPY="llvm-objcopy"
+export OBJDUMP="llvm-objdump"
+export READELF="llvm-readelf"
+export STRIP="llvm-strip"
 
-# ==========================================
-# 2. 拉取源码
-# ==========================================
-echo "📥 正在拉取内核源码..."
 git clone https://github.com/code002-2/sm8550-mainline.git --branch sheng-mainline --depth 1 linux
 cd linux
 
-echo "⚙️ 正在应用配置..."
-
-# 1. 复制干净底座
 cp ../sm8550.config .config
 
-
-echo "🔨 开始编译..."
-
-# 编译核心 Image
-make -j$(nproc) ARCH=arm64 LLVM=1 Image
-
-# 压缩内核镜像
-echo "🗜️ 正在压缩内核镜像..."
-gzip -c arch/arm64/boot/Image > arch/arm64/boot/Image.gz
-
-# 强制编译设备树
-make -j$(nproc) ARCH=arm64 LLVM=1 DTC_FLAGS="-f" qcom/sm8550-xiaomi-sheng.dtb
-
-# 编译所有必须的动态模块
-make -j$(nproc) ARCH=arm64 LLVM=1 modules
-
-# ==========================================
-# 6. 产物体检
-# ==========================================
-echo "📊 核心产物大小检查："
-ls -lh arch/arm64/boot/Image arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb
-
-if [ ! -f "arch/arm64/boot/Image.gz" ]; then
-    echo "❌ 严重错误：Image.gz 依然不存在！"
-    exit 1
-fi
-
-# ==========================================
-# 7. 打包内核镜像 与 导出内核模块
-# ==========================================
-echo "📦 正在导出内核模块并生成 boot.img..."
+make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1
 _kernel_version="$(make kernelrelease -s)"
-PKGDIR=../linux-xiaomi-sheng
 
+
+sed -i "s/Version:.*/Version: ${_kernel_version}/" ../linux-xiaomi-sheng/DEBIAN/control
+
+PKGDIR=../linux-xiaomi-sheng
+ARCH=arm64
+
+# =========================
+# Install kernel images
+# =========================
 mkdir -p $PKGDIR/boot
 
-# 1. 将内核模块导出到目标包目录中
-make ARCH=arm64 INSTALL_MOD_PATH=$PKGDIR modules_install
+install -Dm644 arch/$ARCH/boot/Image.gz \
+    $PKGDIR/boot/Image.gz
 
-# 2. 拷贝内核核心文件
-install -Dm644 arch/arm64/boot/Image.gz $PKGDIR/boot/Image.gz
-install -Dm644 arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb $PKGDIR/boot/sm8550-xiaomi-sheng.dtb
-install -Dm644 .config $PKGDIR/boot/config-${_kernel_version}
+install -Dm644 arch/$ARCH/boot/dts/qcom/sm8550-xiaomi-sheng.dtb \
+    $PKGDIR/boot/sm8550-xiaomi-sheng.dtb
 
-# 3. 打包 mkbootimg (单双系统适配)
+install -Dm644 .config \
+    $PKGDIR/boot/config-${_kernel_version}
+
+install -Dm644 System.map \
+    $PKGDIR/boot/System.map-${_kernel_version}
+    
 chmod +x ../mkbootimg
+
 cat arch/arm64/boot/Image.gz arch/arm64/boot/dts/qcom/sm8550-xiaomi-sheng.dtb > Image.gz-dtb_sheng
+
+install -Dm644 Image.gz-dtb_sheng \
+    $PKGDIR/boot/Image.gz-dtb_sheng
+
 mv Image.gz-dtb_sheng zImage_sheng
+../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
+../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
 
-../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=linux rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_dualboot.img
-../mkbootimg --kernel zImage_sheng --cmdline "root=PARTLABEL=userdata rootwait rw" --base 0x00000000 --kernel_offset 0x00008000 --tags_offset 0x01e00000 --pagesize 4096 --id -o ../boot_sheng_singleboot.img
+#rm $1/linux-xiaomi-sheng/usr/dummy
 
-# ==========================================
-# 8. 组装与构建 DEB 包 (固件拉取 + 音频拉取 + UsrMerge)
-# ==========================================
+make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 INSTALL_MOD_PATH=../linux-xiaomi-sheng modules_install
+rm ../linux-xiaomi-sheng/lib/modules/**/
 cd ..
 
 echo "📥 正在从上游拉取最新的固件文件..."

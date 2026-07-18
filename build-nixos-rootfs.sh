@@ -123,9 +123,12 @@ for MODE in "${BOOT_MODES[@]}"; do
     esac
     chmod +w "$OUT_DIR/$ROOTFS_IMG"
 
+    echo "  Repairing ext4 bitmap inconsistencies from make_ext4fs"
+    e2fsck -fp "$OUT_DIR/$ROOTFS_IMG" || echo "  WARNING: e2fsck -fp found unfixable issues, image may fail to mount r/w"
+
     if [ "$IMAGE_SIZE" != "auto" ]; then
         echo "  Resizing to ${IMAGE_SIZE}"
-        e2fsck -fn "$OUT_DIR/$ROOTFS_IMG" || true
+        e2fsck -fp "$OUT_DIR/$ROOTFS_IMG" || true
         CURRENT_SIZE="$(stat -c%s "$OUT_DIR/$ROOTFS_IMG")"
         DESIRED_SIZE="$(numfmt --from=iec "$IMAGE_SIZE")"
         if [ "$DESIRED_SIZE" -lt "$CURRENT_SIZE" ]; then
@@ -155,7 +158,7 @@ FSTABEOF
     tune2fs -U "$FILESYSTEM_UUID" "$OUT_DIR/$ROOTFS_IMG" >/dev/null
 
     echo "  Verifying rootfs integrity"
-    e2fsck -fn "$OUT_DIR/$ROOTFS_IMG" || echo "  WARNING: e2fsck reported issues (build-time quirks from make_ext4fs are expected)"
+    e2fsck -fn "$OUT_DIR/$ROOTFS_IMG" || echo "  WARNING: e2fsck reported issues"
 
     echo "  RootFS complete: $OUT_DIR/$ROOTFS_IMG"
 

@@ -60,11 +60,9 @@
   '';
 
   environment.etc."xdg/niri/config.kdl".text = ''
-    // Auto-start terminal and on-screen keyboard
     spawn-at-startup "foot"
     spawn-at-startup "wvkbd-mobintl"
 
-    // Input: use libinput defaults, tap-to-click for touchscreen
     input {
         touch {
             tap
@@ -77,7 +75,56 @@
         }
     }
 
-    // Keyboard shortcuts (Mod = Super/Win key)
+    layout {
+        gaps 8
+        center-focused-column "never"
+        default-column-width { proportion 0.5; }
+        background-color "#1e1e2e"
+
+        focus-ring {
+            on
+            width 3
+            active-color "#89b4fa"
+            inactive-color "#45475a"
+        }
+
+        border {
+            on
+            width 1
+            active-color "#89b4fa"
+            inactive-color "#313244"
+        }
+
+        insert-hint {
+            on
+            color "#89b4fa80"
+        }
+    }
+
+    animations {
+        workspace-switch {
+            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+        }
+
+        window-open {
+            duration-ms 150
+            curve "ease-out-expo"
+        }
+
+        window-close {
+            duration-ms 150
+            curve "ease-out-quad"
+        }
+
+        window-movement {
+            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+        }
+
+        window-resize {
+            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+        }
+    }
+
     binds {
         Mod+Return { spawn "foot"; }
         Mod+T { spawn "foot"; }
@@ -87,9 +134,16 @@
         Mod+L { focus-column-right; }
         Mod+J { focus-window-down; }
         Mod+K { focus-window-up; }
+        Mod+Shift+H { move-column-left; }
+        Mod+Shift+L { move-column-right; }
+        Mod+Shift+J { move-window-down; }
+        Mod+Shift+K { move-window-up; }
         Mod+1 { switch-to-workspace 1; }
         Mod+2 { switch-to-workspace 2; }
         Mod+3 { switch-to-workspace 3; }
+        Mod+Ctrl+C { quit; }
+        Mod+Minus { set-column-width "-10%"; }
+        Mod+Equal { set-column-width "+10%"; }
     }
   '';
 }

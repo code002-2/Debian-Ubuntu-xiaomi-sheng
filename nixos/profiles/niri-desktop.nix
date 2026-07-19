@@ -63,6 +63,7 @@
   environment.etc."xdg/niri/config.kdl".text = ''
     spawn-at-startup "foot"
     spawn-at-startup "wvkbd-mobintl"
+    spawn-at-startup "waybar"
 
     input {
         touch {
@@ -175,5 +176,138 @@
         Mod+Equal { set-column-width "+10%"; }
         Mod+S { screenshot; }
     }
+
+    // Hide the bottom of the screen for waybar
+    prefer-no-csd
+  '';
+
+  environment.etc."xdg/waybar/config".text = builtins.toJSON {
+    layer = "top";
+    position = "bottom";
+    height = 36;
+    margin-top = 0;
+    margin-bottom = 0;
+    margin-left = 0;
+    margin-right = 0;
+    spacing = 4;
+    modules-left = [ "custom/start" "niri/workspaces" ];
+    modules-center = [ "clock" ];
+    modules-right = [ "tray" "battery" "network" "cpu" "memory" ];
+
+    "custom/start" = {
+      format = " niri ";
+      tooltip = false;
+      on-click = "fuzzel";
+    };
+
+    "niri/workspaces" = {
+      format = "{icon}";
+      on-click = "activate";
+    };
+
+    tray = { spacing = 8; };
+
+    battery = {
+      format = "{capacity}%";
+      format-icons = ["10" "20" "30" "40" "50" "60" "70" "80" "90" "100"];
+      states = {
+        warning = 20;
+        critical = 10;
+      };
+      format-warning = "{capacity}%";
+      format-critical = "{capacity}%";
+    };
+
+    network = {
+      format-wifi = " {essid}";
+      format-ethernet = " eth";
+      format-disconnected = " down";
+      tooltip-format = "{ipaddr}";
+    };
+
+    cpu = { format = " cpu {usage}%"; };
+    memory = { format = " mem {used:0.1f}G"; };
+    clock = {
+      format = "{:%H:%M  %m/%d}";
+      tooltip-format = "{:%Y-%m-%d %A}";
+    };
+  };
+
+  environment.etc."xdg/waybar/style.css".text = ''
+    * {
+        font-family: "monospace";
+        font-size: 13px;
+        min-height: 0;
+    }
+
+    window#waybar {
+        background-color: #101010;
+        color: #cccccc;
+        border-top: 1px solid #0078d4;
+    }
+
+    #workspaces button {
+        padding: 0 6px;
+        background: transparent;
+        color: #888888;
+        border: none;
+        border-bottom: 2px solid transparent;
+    }
+
+    #workspaces button.active {
+        color: #ffffff;
+        border-bottom: 2px solid #0078d4;
+    }
+
+    #workspaces button:hover {
+        background: #2a2a2a;
+        color: #ffffff;
+    }
+
+    #custom-start {
+        color: #0078d4;
+        font-weight: bold;
+        padding: 0 12px;
+    }
+
+    #clock {
+        color: #cccccc;
+    }
+
+    #battery, #network, #cpu, #memory, #tray {
+        padding: 0 8px;
+        color: #999999;
+    }
+
+    #battery.warning { color: #e5c07b; }
+    #battery.critical { color: #e06c75; }
+  '';
+
+  environment.etc."xdg/fuzzel/fuzzel.ini".text = ''
+    [main]
+    font=monospace:size=14
+    terminal=foot
+    prompt=
+
+    width=40
+    lines=10
+    horizontal-pad=20
+    vertical-pad=20
+    inner-pad=10
+
+    line-height=28
+    layer=overlay
+
+    icon-theme=Adwaita
+    fields=filename,name
+
+    [colors]
+    background=1e1e2edd
+    text=cdd6f4ff
+    match=89b4faff
+    selection=45475aff
+    selection-text=cdd6f4ff
+    selection-match=89b4faff
+    border=0078d4ff
   '';
 }

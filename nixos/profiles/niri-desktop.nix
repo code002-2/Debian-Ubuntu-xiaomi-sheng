@@ -25,6 +25,7 @@
     foot
     fuzzel
     wvkbd
+    waybar
   ];
 
   # Auto-start niri on the autologin tty (getty tty1)
@@ -76,28 +77,56 @@
     }
 
     layout {
-        gaps 8
+        gaps 12
         center-focused-column "never"
         default-column-width { proportion 0.5; }
-        background-color "#1e1e2e"
+        background-color "#202020"
+
+        shadow {
+            on
+            softness 40
+            spread 8
+            offset x=0 y=4
+            draw-behind-window true
+            color "#00000060"
+        }
 
         focus-ring {
             on
-            width 3
-            active-color "#89b4fa"
-            inactive-color "#45475a"
+            width 2
+            active-color "#60cdff"
+            inactive-color "#3b3b3b"
         }
 
         border {
             on
             width 1
-            active-color "#89b4fa"
-            inactive-color "#313244"
+            active-color "#0078d4"
+            inactive-color "#383838"
         }
 
         insert-hint {
             on
-            color "#89b4fa80"
+            color "#0078d480"
+        }
+    }
+
+    window-rule {
+        geometry-corner-radius 12
+        clip-to-geometry true
+    }
+
+    layer-rule {
+        match namespace="^launcher$"
+
+        shadow {
+            on
+        }
+
+        geometry-corner-radius 12
+
+        background-effect {
+            blur true
         }
     }
 
@@ -107,21 +136,21 @@
         }
 
         window-open {
-            duration-ms 150
+            duration-ms 200
             curve "ease-out-expo"
         }
 
         window-close {
-            duration-ms 150
+            duration-ms 200
             curve "ease-out-quad"
         }
 
         window-movement {
-            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+            spring damping-ratio=0.7 stiffness=600 epsilon=0.0001
         }
 
         window-resize {
-            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+            spring damping-ratio=0.7 stiffness=600 epsilon=0.0001
         }
     }
 
@@ -144,6 +173,7 @@
         Mod+Ctrl+C { quit; }
         Mod+Minus { set-column-width "-10%"; }
         Mod+Equal { set-column-width "+10%"; }
+        Mod+S { screenshot; }
     }
   '';
 }

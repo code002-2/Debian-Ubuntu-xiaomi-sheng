@@ -6,6 +6,90 @@
 
 { config, lib, pkgs, vars, ... }:
 
+let
+  nyxNiriWallpapers = pkgs.fetchzip {
+    name = "nyx-niri-wallpapers";
+    url = "https://github.com/ech678/NyxNiri/archive/refs/heads/main.tar.gz";
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    stripRoot = false;
+  };
+
+  wallpaperSwitch = pkgs.writeShellScriptBin "wallpaper-switch" ''
+    set -euo pipefail
+
+    WALLPAPER_DIR="/etc/wallpapers"
+    STATE_FILE="$HOME/.cache/wallpaper-state"
+    ACTION="''${1:-next}"
+
+    mkdir -p "$HOME/.cache"
+
+    mapfile -t walls < <(find "$WALLPAPER_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort)
+    TOTAL=''${#walls[@]}
+
+    if [ "$TOTAL" -eq 0 ]; then
+      notify-send -u critical "Wallpaper" "No wallpapers found in $WALLPAPER_DIR"
+      exit 1
+    fi
+
+    if [ -f "$STATE_FILE" ]; then
+      CURRENT_INDEX=$(cat "$STATE_FILE")
+    else
+      CURRENT_INDEX=0
+    fi
+
+    case "$ACTION" in
+      next)
+        CURRENT_INDEX=$(( (CURRENT_INDEX + 1) % TOTAL ))
+        ;;
+      prev)
+        CURRENT_INDEX=$(( (CURRENT_INDEX - 1 + TOTAL) % TOTAL ))
+        ;;
+      pick)
+        CHOICE=$(printf '%s\n' "''${walls[@]}" | sed "s|$WALLPAPER_DIR/||" | fuzzel --dmenu --prompt="Wallpaper: ")
+        if [ -z "$CHOICE" ]; then exit 0; fi
+        WALLPAPER="$WALLPAPER_DIR/$CHOICE"
+        for i in "''${!walls[@]}"; do
+          if [ "''${walls[$i]}" = "$WALLPAPER" ]; then
+            CURRENT_INDEX=$i; break
+          fi
+        done
+        ;;
+      *)
+        echo "Usage: wallpaper-switch {next|prev|pick}"
+        exit 1
+        ;;
+    esac
+
+    echo "$CURRENT_INDEX" > "$STATE_FILE"
+    WALLPAPER="''${walls[$CURRENT_INDEX]}"
+
+    pkill swaybg 2>/dev/null || true
+    swaybg -i "$WALLPAPER" -m fill &
+    notify-send "Wallpaper" "$(basename "$WALLPAPER")" --app-name="wallpaper-switch"
+  '';
+
+  wallpaperLaunch = pkgs.writeShellScriptBin "wallpaper-launch" ''
+    set -euo pipefail
+    WALLPAPER_DIR="/etc/wallpapers"
+    STATE_FILE="$HOME/.cache/wallpaper-state"
+
+    mkdir -p "$HOME/.cache"
+
+    if [ -f "$STATE_FILE" ]; then
+      INDEX=$(cat "$STATE_FILE")
+    else
+      INDEX=0
+      echo 0 > "$STATE_FILE"
+    fi
+
+    mapfile -t walls < <(find "$WALLPAPER_DIR" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | sort)
+    if [ "''${#walls[@]}" -gt 0 ]; then
+      WALL="''${walls[$(( INDEX % ''${#walls[@]} ))]}"
+      swaybg -i "$WALL" -m fill &
+    fi
+  '';
+in
+
 {
   programs.niri.enable = true;
   hardware.graphics.enable = true;
@@ -29,7 +113,12 @@
     waybar
     noctalia-qs
     noctalia-shell
+    wallpaperSwitch
+    wallpaperLaunch
     swaybg
+    libnotify
+    procps
+    gnused
     mpvpaper
     fastfetch
     eza
@@ -111,7 +200,7 @@
   environment.etc."xdg/niri/config.kdl".text = ''
     spawn-at-startup "kitty"
     spawn-at-startup "wvkbd-mobintl"
-    spawn-at-startup "swaybg" "-c" "#1a1b26"
+    spawn-at-startup "wallpaper-launch"
     spawn-at-startup "waybar"
 
     prefer-no-csd
@@ -362,6 +451,11 @@
         XF86AudioRaiseVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
         XF86AudioLowerVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
         XF86AudioMute        { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+
+        // Wallpaper switcher — cycle or pick from fuzzel
+        Mod+Ctrl+N           { spawn "wallpaper-switch" "next"; }
+        Mod+Ctrl+P           { spawn "wallpaper-switch" "prev"; }
+        Mod+Ctrl+W           { spawn "wallpaper-switch" "pick"; }
     }
 
     environment {
@@ -377,6 +471,9 @@
         skip-at-startup
     }
   '';
+
+  # NyxNiri wallpapers from upstream repo
+  environment.etc."wallpapers".source = "${nyxNiriWallpapers}/NyxNiri-main/Wallpapers";
 
   environment.etc."xdg/waybar/config".text = builtins.toJSON {
     layer = "top";

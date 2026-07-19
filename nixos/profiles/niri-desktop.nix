@@ -46,7 +46,7 @@ let
     TOTAL=''${#walls[@]}
 
     if [ "$TOTAL" -eq 0 ]; then
-      notify-send -u critical "Wallpaper" "No wallpapers found in $WALLPAPER_DIR"
+      echo "No wallpapers found in $WALLPAPER_DIR — run wallpaper-sync first" >&2
       exit 1
     fi
 
@@ -96,7 +96,7 @@ let
         swaybg -i "$WALLPAPER" -m fill &
         ;;
     esac
-    notify-send "Wallpaper" "$(basename "$WALLPAPER")" --app-name="wallpaper-switch"
+    echo "Wallpaper: $(basename "$WALLPAPER")"
   '';
 
   wallpaperLaunch = pkgs.writeShellScriptBin "wallpaper-launch" ''
@@ -158,7 +158,6 @@ in
     wallpaperSwitch
     wallpaperLaunch
     swaybg
-    libnotify
     procps
     gnused
     mpvpaper

@@ -7,12 +7,30 @@
 { config, lib, pkgs, vars, ... }:
 
 let
-  nyxNiriWallpapers = builtins.fetchTree {
-    type = "github";
-    owner = "ech678";
-    repo = "NyxNiri";
-    rev = "79894f443f5b21bb16077f628a35d9c47301b15d";
-  };
+  wallpaperSync = pkgs.writeShellScriptBin "wallpaper-sync" ''
+    set -euo pipefail
+    WALLPAPER_DIR="/etc/wallpapers"
+    REPO_URL="https://github.com/ech678/NyxNiri.git"
+    WORK_DIR="/tmp/nyx-niri-wallpapers"
+
+    if [ -d "$WALLPAPER_DIR" ] && [ -n "$(ls -A "$WALLPAPER_DIR" 2>/dev/null)" ]; then
+      echo "Wallpapers already synced, skipping."
+      exit 0
+    fi
+
+    rm -rf "$WORK_DIR"
+    mkdir -p "$WORK_DIR"
+
+    git clone --depth 1 --filter=blob:none --sparse "$REPO_URL" "$WORK_DIR"
+    cd "$WORK_DIR"
+    git sparse-checkout set Wallpapers
+
+    mkdir -p "$WALLPAPER_DIR"
+    cp -r Wallpapers/* "$WALLPAPER_DIR"/
+
+    rm -rf "$WORK_DIR"
+    echo "Wallpapers synced successfully: $(find "$WALLPAPER_DIR" -type f | wc -l) files"
+  '';
 
   wallpaperSwitch = pkgs.writeShellScriptBin "wallpaper-switch" ''
     set -euo pipefail
@@ -137,12 +155,14 @@ in
     waybar
     noctalia-qs
     noctalia-shell
+    wallpaperSync
     wallpaperSwitch
     wallpaperLaunch
     swaybg
     libnotify
     procps
     gnused
+    git
     mpvpaper
     fastfetch
     eza
@@ -496,8 +516,17 @@ in
     }
   '';
 
-  # NyxNiri wallpapers from upstream repo
-  environment.etc."wallpapers".source = "${nyxNiriWallpapers}/Wallpapers";
+  # Wallpaper sync on first boot (one-shot, shallow clone from NyxNiri)
+  systemd.services.wallpaper-sync = {
+    description = "Sync NyxNiri wallpapers on first boot";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "display-manager.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${wallpaperSync}/bin/wallpaper-sync";
+      RemainAfterExit = true;
+    };
+  };
 
   environment.etc."xdg/waybar/config".text = builtins.toJSON {
     layer = "top";

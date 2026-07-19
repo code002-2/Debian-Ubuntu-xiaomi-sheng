@@ -65,36 +65,60 @@
     spawn-at-startup "wvkbd-mobintl"
     spawn-at-startup "waybar"
 
+    prefer-no-csd
+    screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
     input {
         touch {
             tap
         }
         touchpad {
             tap
+            natural-scroll
         }
         keyboard {
             xkb-layout "us"
         }
     }
 
+    cursor {
+        xcursor-theme "Adwaita"
+        xcursor-size 24
+    }
+
+    // Blur settings from NyxNiri / glassy-niri
+    blur {
+        passes 3
+        offset 2.3
+        noise 0.001
+        saturation 2
+    }
+
     layout {
         gaps 12
         center-focused-column "never"
         default-column-width { proportion 0.5; }
+        preset-column-widths {
+            proportion 0.33333
+            proportion 0.5
+            proportion 0.66667
+        }
         background-color "#202020"
 
         shadow {
             on
-            softness 40
-            spread 8
-            offset x=0 y=4
-            draw-behind-window true
-            color "#00000060"
+            softness 10
+            spread 4
+            offset x=0 y=0
+            color "#00000070"
         }
 
         focus-ring {
-            on
-            width 2
+            off
+            width 0
+        }
+
+        tab-indicator {
             active-color "#60cdff"
             inactive-color "#3b3b3b"
         }
@@ -112,73 +136,163 @@
         }
     }
 
+    // Global window appearance
     window-rule {
         geometry-corner-radius 12
         clip-to-geometry true
-    }
-
-    layer-rule {
-        match namespace="^launcher$"
-
-        shadow {
-            on
-        }
-
-        geometry-corner-radius 12
-
+        draw-border-with-background false
+        opacity 0.95
         background-effect {
             blur true
         }
     }
 
+    window-rule {
+        match is-focused=false
+        opacity 0.88
+    }
+
+    // Overview backdrop
+    overview {
+        backdrop-color "#20202090"
+    }
+
+    // Alt+Tab window switcher
+    recent-windows {
+        binds {
+            Alt+Tab         { next-window scope="output"; }
+            Alt+Shift+Tab   { previous-window scope="output"; }
+        }
+        highlight {
+            corner-radius 12
+            active-color "#60cdff"
+        }
+    }
+
+    // Floating windows
+    window-rule {
+        match app-id=r"^org\.gnome\.Nautilus$"
+        match app-id=r"^org\.gnome\.Calculator$"
+        match app-id=r"^gnome-calculator$"
+        match app-id=r"^blueman-manager$"
+        match app-id=r"^xdg-desktop-portal$"
+        open-floating true
+    }
+
+    window-rule {
+        match app-id=r"^gnome-control-center$"
+        match app-id=r"^pavucontrol$"
+        match app-id=r"^nm-connection-editor$"
+        default-column-width { proportion 0.5; }
+        open-floating false
+    }
+
+    // Picture-in-Picture floating
+    window-rule {
+        match title="画中画"
+        match title="Picture-in-Picture"
+        open-floating true
+        opacity 1.0
+        default-column-width
+        default-window-height
+        default-floating-position x=20 y=20 relative-to="bottom-right"
+    }
+
     animations {
         workspace-switch {
-            spring damping-ratio=0.8 stiffness=800 epsilon=0.0001
+            spring damping-ratio=0.8 stiffness=523 epsilon=0.0001
         }
-
         window-open {
-            duration-ms 200
+            duration-ms 150
             curve "ease-out-expo"
         }
-
         window-close {
+            duration-ms 150
+            curve "ease-out-quad"
+        }
+        horizontal-view-movement {
+            spring damping-ratio=0.85 stiffness=423 epsilon=0.0001
+        }
+        window-movement {
+            spring damping-ratio=0.75 stiffness=323 epsilon=0.0001
+        }
+        window-resize {
+            spring damping-ratio=0.85 stiffness=423 epsilon=0.0001
+        }
+        config-notification-open-close {
+            spring damping-ratio=0.65 stiffness=923 epsilon=0.001
+        }
+        screenshot-ui-open {
             duration-ms 200
             curve "ease-out-quad"
         }
-
-        window-movement {
-            spring damping-ratio=0.7 stiffness=600 epsilon=0.0001
-        }
-
-        window-resize {
-            spring damping-ratio=0.7 stiffness=600 epsilon=0.0001
+        overview-open-close {
+            spring damping-ratio=0.85 stiffness=800 epsilon=0.0001
         }
     }
 
     binds {
-        Mod+Return { spawn "foot"; }
-        Mod+T { spawn "foot"; }
-        Mod+D { spawn "fuzzel"; }
-        Mod+Q { close-window; }
-        Mod+H { focus-column-left; }
-        Mod+L { focus-column-right; }
-        Mod+J { focus-window-down; }
-        Mod+K { focus-window-up; }
-        Mod+Shift+H { move-column-left; }
-        Mod+Shift+L { move-column-right; }
-        Mod+Shift+J { move-window-down; }
-        Mod+Shift+K { move-window-up; }
-        Mod+1 { switch-to-workspace 1; }
-        Mod+2 { switch-to-workspace 2; }
-        Mod+3 { switch-to-workspace 3; }
-        Mod+Ctrl+C { quit; }
-        Mod+Minus { set-column-width "-10%"; }
-        Mod+Equal { set-column-width "+10%"; }
-        Mod+S { screenshot; }
+        Mod+Tab repeat=false { toggle-overview; }
+        Mod+Return           { spawn "foot"; }
+        Mod+T                { spawn "foot"; }
+        Mod+D                { spawn "fuzzel"; }
+        Mod+Q                { close-window; }
+        Mod+Shift+E          { quit; }
+
+        Mod+Shift+R          { spawn "niri" "msg" "action" "load-config-file"; }
+
+        Mod+H                { focus-column-left; }
+        Mod+L                { focus-column-right; }
+        Mod+J                { focus-window-down; }
+        Mod+K                { focus-window-up; }
+
+        Mod+Shift+H          { move-column-left; }
+        Mod+Shift+L          { move-column-right; }
+        Mod+Shift+J          { move-window-down; }
+        Mod+Shift+K          { move-window-up; }
+
+        Mod+F                { maximize-column; }
+        Mod+Shift+F          { fullscreen-window; }
+        Mod+Space            { switch-preset-column-width; }
+
+        Mod+Comma            { consume-window-into-column; }
+        Mod+Period           { expel-window-from-column; }
+
+        Mod+Minus            { set-column-width "-10%"; }
+        Mod+Equal            { set-column-width "+10%"; }
+
+        Mod+1                { focus-workspace 1; }
+        Mod+2                { focus-workspace 2; }
+        Mod+3                { focus-workspace 3; }
+        Mod+4                { focus-workspace 4; }
+        Mod+5                { focus-workspace 5; }
+        Mod+Shift+1          { move-column-to-workspace 1; }
+        Mod+Shift+2          { move-column-to-workspace 2; }
+        Mod+Shift+3          { move-column-to-workspace 3; }
+
+        Mod+WheelScrollDown  cooldown-ms=150 { focus-workspace-down; }
+        Mod+WheelScrollUp    cooldown-ms=150 { focus-workspace-up; }
+
+        Mod+S                { screenshot; }
+        Mod+Slash            { show-hotkey-overlay; }
+
+        XF86AudioRaiseVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+        XF86AudioLowerVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+        XF86AudioMute        { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
     }
 
-    // Hide the bottom of the screen for waybar
-    prefer-no-csd
+    environment {
+        XDG_CURRENT_DESKTOP "niri"
+        XDG_SESSION_TYPE "wayland"
+        ELECTRON_OZONE_PLATFORM_HINT "auto"
+        QT_QPA_PLATFORM "wayland"
+        QT_QPA_PLATFORMTHEME "gtk3"
+        QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
+    }
+
+    hotkey-overlay {
+        skip-at-startup
+    }
   '';
 
   environment.etc."xdg/waybar/config".text = builtins.toJSON {

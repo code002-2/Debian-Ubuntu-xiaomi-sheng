@@ -82,6 +82,13 @@ jobs:
           nix flake lock --update-input shengKernelSrc --update-input shengFirmware --update-input shengFingerprint --update-input shengThp --update-input shengPenStatus --update-input shengAlsaUcm
         working-directory: nixos
 
+      - name: Fast validate (eval only, no build)
+        run: |
+          nix --extra-experimental-features "nix-command flakes" \
+            eval "./nixos#nixosConfigurations.sheng.config.system.build.toplevel.drvPath" \
+            --fallback
+        working-directory: nixos
+
       - name: Validate stage-2 configuration
         run: |
           nix --extra-experimental-features "nix-command flakes" \

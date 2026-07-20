@@ -35,7 +35,8 @@
 | 连接 | Type-C | ⚠️ 部分 | 与键盘触点冲突 |
 | 多媒体 | 音频/相机 | ✅ 正常 | 相机效果劣于 Android |
 | 传感器 | 全部 | ✅ 正常 | 自动旋转/亮度/霍尔等 |
-| 手写笔 | 测试 | ❌ 故障 | 仅充电可用 |
+| 手写笔 | 测试 | ✅ 可用 | 含触控笔状态指示器 |
+| 指纹 | 测试 | ✅ 可用 | FPC1553 TEE 驱动 |
 
 > 完整功能状态表请查阅 [PostmarketOS Wiki](https://wiki.postmarketos.org/wiki/Xiaomi_Pad_6S_Pro_12.4_(xiaomi-sheng))
 

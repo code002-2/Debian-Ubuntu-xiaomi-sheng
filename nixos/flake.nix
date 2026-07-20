@@ -36,14 +36,22 @@
       url = "github:ianchb/xiaomi-pen-status";
       flake = false;
     };
+    shengAlsaUcm = {
+      url = "github:map220v/alsa-ucm-conf/mainline";
+      flake = false;
+    };
   };
 
-  outputs = { self, mobile-nixos, nixpkgs, home-manager, shengKernelSrc, shengFirmware, shengFingerprint, shengThp, shengPenStatus }:
+  outputs = { self, mobile-nixos, nixpkgs, home-manager, shengKernelSrc, shengFirmware, shengFingerprint, shengThp, shengPenStatus, shengAlsaUcm }:
     let
       system = "aarch64-linux";
       shengOverlay = final: prev: {
         inherit shengKernelSrc shengFingerprint shengThp shengPenStatus;
         sheng-firmware = shengFirmware.packages.${prev.system}.default;
+        sheng-alsa-ucm-conf = prev.alsa-ucm-conf.overrideAttrs (old: {
+          src = shengAlsaUcm;
+          version = "mainline-2026-07-20";
+        });
         libinput = prev.libinput.override {
           luaSupport = false;
         };

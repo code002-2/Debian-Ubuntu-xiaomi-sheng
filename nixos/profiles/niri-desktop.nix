@@ -607,11 +607,11 @@ in
     direction = "down"
     alpha     = 0.55
 
-    [shell.panel]
+     [shell.panel]
     transparency_mode  = "glass"
     borders            = true
     shadow             = true
-    launcher_placement = "centered"
+    launcher_placement = "floating"
 
     [shell.launcher]
     categories      = true
@@ -652,8 +652,8 @@ in
     thickness          = 38
     background_opacity = 0.79
     radius             = 14
-    margin_h           = 10
-    margin_v           = 6
+    margin_ends        = 10
+    margin_edge        = 6
     padding            = 12
     widget_spacing     = 4
     scale              = 1.0

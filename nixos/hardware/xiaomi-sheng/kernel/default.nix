@@ -15,8 +15,8 @@ let
   llvmPkgs = pkgs.llvmPackages;
 in
 mobile-nixos.kernel-builder-clang {
-  version = "7.1.3";
-  modDirVersion = "7.1.3";
+  version = "7.1.4";
+  modDirVersion = "7.1.4";
   src = shengKernelSrc;
   configfile = ./config.aarch64;
   patches = [

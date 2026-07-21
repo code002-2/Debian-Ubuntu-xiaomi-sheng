@@ -231,6 +231,8 @@ in
     vulkan-tools
     mesa-demos
     noctaliaPkg
+    cook-nixvim
+    cava
   ];
 
   fonts.packages = with pkgs; [
@@ -725,28 +727,29 @@ in
   environment.etc."xdg/fastfetch/config.jsonc".text = ''
     {
       "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+      "logo": { "padding": { "top": 1 } },
+      "display": { "separator": " " },
       "modules": [
-        "title",
-        "separator",
-        "os",
-        "host",
-        "kernel",
-        "uptime",
-        "packages",
-        "shell",
-        "display",
-        "wm",
-        "terminal",
-        "cpu",
-        "gpu",
-        "memory",
+        { "type": "title",    "key": "  ->", "format": "{user-name}@{host-name}", "keyColor": "blue" },
+        { "type": "os",       "key": "  ->", "keyColor": "blue" },
+        { "type": "kernel",   "key": "  ->", "keyColor": "blue" },
+        { "type": "packages", "key": "  ->", "keyColor": "blue" },
+        { "type": "uptime",   "key": "  ->", "keyColor": "blue" },
+        { "type": "localip",  "key": "  ->", "compact": true, "keyColor": "blue" },
         "break",
-        "colors"
-      ],
-      "display": {
-        "separator": " → "
-      },
-      "logo": { "type": "small" }
+        { "type": "shell",    "key": "  >>", "keyColor": "yellow" },
+        { "type": "terminal", "key": "  >>", "keyColor": "yellow" },
+        { "type": "de",       "key": "  >>", "keyColor": "yellow" },
+        { "type": "wm",       "key": "  >>", "keyColor": "yellow" },
+        "break",
+        { "type": "host",     "key": "  <>", "keyColor": "green" },
+        { "type": "cpu",      "key": "  <>", "format": "{1} @{7}", "keyColor": "green" },
+        { "type": "gpu",      "key": "  <>", "format": "{1} {2} {3}", "keyColor": "green" },
+        { "type": "memory",   "key": "  <>", "keyColor": "green" },
+        { "type": "display",  "key": "  <>", "format": "{1}x{2} @{3}Hz", "keyColor": "green" },
+        { "type": "sound",    "key": "  <>", "keyColor": "green" },
+        { "type": "colors",   "paddingLeft": 10, "symbol": "circle" }
+      ]
     }
   '';
 }

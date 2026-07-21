@@ -40,14 +40,19 @@
       url = "github:map220v/alsa-ucm-conf/mainline";
       flake = false;
     };
+    CookNixvim = {
+      url = "github:Youthdreamer/CookNixvim";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, mobile-nixos, nixpkgs, home-manager, shengKernelSrc, shengFirmware, shengFingerprint, shengThp, shengPenStatus, shengAlsaUcm }:
+  outputs = { self, mobile-nixos, nixpkgs, home-manager, shengKernelSrc, shengFirmware, shengFingerprint, shengThp, shengPenStatus, shengAlsaUcm, CookNixvim }:
     let
       system = "aarch64-linux";
       shengOverlay = final: prev: {
         inherit shengKernelSrc shengFingerprint shengThp shengPenStatus;
         sheng-firmware = shengFirmware.packages.${prev.system}.default;
+        cook-nixvim = CookNixvim.packages.${prev.system}.default;
         sheng-alsa-ucm-conf = prev.alsa-ucm-conf.overrideAttrs (old: {
           src = shengAlsaUcm;
           version = "mainline-2026-07-20";

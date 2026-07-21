@@ -71,15 +71,15 @@ jobs:
           install_url: https://nixos.org/nix/install
           extra_nix_config: |
             experimental-features = nix-command flakes
-            substituters = https://cache.nixos.org https://nix-community.cachix.org https://sheng-nixos.cachix.org
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-community.cachix.org-1:mB9FSh9qf2dNimDSK38dlRG8QZwyUKiBlbWPixHpmMo= sheng-nixos.cachix.org-1:JWMDgm5bCsCKpsq/vx6mgDMeLiQ5g9vLEhqCy2EMKJk=
+            substituters = https://cache.nixos.org https://nix-community.cachix.org https://sheng-nixos.cachix.org https://cook-nixvim.cachix.org
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-community.cachix.org-1:mB9FSh9qf2dNimDSK38dlRG8QZwyUKiBlbWPixHpmMo= sheng-nixos.cachix.org-1:JWMDgm5bCsCKpsq/vx6mgDMeLiQ5g9vLEhqCy2EMKJk= cook-nixvim.cachix.org-1:LjCZ3VSYrcwTQxHpd834EIswdkfHoSd/EsKUYLRruF4=
 
       - name: Enable Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@v13
 
       - name: Update flake lock
         run: |
-          nix flake lock --update-input shengKernelSrc --update-input shengFirmware --update-input shengFingerprint --update-input shengThp --update-input shengPenStatus --update-input shengAlsaUcm
+          nix flake lock --update-input shengKernelSrc --update-input shengFirmware --update-input shengFingerprint --update-input shengThp --update-input shengPenStatus --update-input shengAlsaUcm --update-input CookNixvim
         working-directory: nixos
 
       - name: Fast validate (eval only, no build)

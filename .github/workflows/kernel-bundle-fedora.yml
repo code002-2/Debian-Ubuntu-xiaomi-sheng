@@ -1,0 +1,160 @@
+name: Build Kernel Bundle (Fedora RPM)
+
+on:
+  workflow_run:
+    workflows: ["Build Kernel"]
+    types:
+      - completed
+    branches: [main, master, sheng]
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "内核版本"
+        required: true
+        default: "7.1"
+      channel:
+        description: "内核通道"
+        required: true
+        type: choice
+        options: [mainline, stable]
+        default: "mainline"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.channel || 'mainline' }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y rpm wget git
+
+      - name: Download and repack kernel as RPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          KERNEL_VER="${{ github.event.inputs.kernel_version || '7.1' }}"
+          CHANNEL="${{ github.event.inputs.channel || 'mainline' }}"
+          KERNEL_REPO="${{ github.repository }}"
+
+          echo "下载内核 DEB 包..."
+          mkdir -p bundle
+          gh release download "kernel-${CHANNEL}-${KERNEL_VER}" \
+            --pattern "*.deb" \
+            --repo "$KERNEL_REPO" \
+            --dir bundle/ \
+            --clobber || {
+            echo "错误: 下载内核包失败" >&2
+            exit 1
+          }
+
+          echo "解压 DEB 并重打包为 RPM..."
+          mkdir -p linux-xiaomi-sheng
+          for deb in bundle/linux-*.deb; do
+            [ -f "$deb" ] || continue
+            echo "  处理: $(basename $deb)"
+            dpkg-deb --fsys-tarfile "$deb" | tar -x -C linux-xiaomi-sheng/
+          done
+
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp rpm/linux-xiaomi-sheng.spec rpmbuild/SPECS/
+          sed -i "s/%{kernel_version}/${KERNEL_VER}/" rpmbuild/SPECS/linux-xiaomi-sheng.spec
+
+          rpmbuild -bb --define "_topdir $PWD/rpmbuild" \
+            --define "kernel_version ${KERNEL_VER}" \
+            rpmbuild/SPECS/linux-xiaomi-sheng.spec
+
+          mkdir -p bundle-fedora
+          find rpmbuild/RPMS -name "*.rpm" -exec cp {} bundle-fedora/ \;
+
+          echo "内核 RPM:"
+          ls -la bundle-fedora/
+
+      - name: Download firmware RPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "firmware-fedora" \
+            --pattern "*.rpm" \
+            --repo "${{ github.repository }}" \
+            --dir bundle-fedora/ \
+            --clobber || echo "警告: firmware RPM 下载失败"
+
+      - name: Download ALSA RPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "alsa-fedora" \
+            --pattern "*.rpm" \
+            --repo "${{ github.repository }}" \
+            --dir bundle-fedora/ \
+            --clobber || echo "警告: alsa RPM 下载失败"
+
+      - name: Download devauth RPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "sheng_devauth-fedora" \
+            --pattern "*.rpm" \
+            --repo "${{ github.repository }}" \
+            --dir bundle-fedora/ \
+            --clobber || echo "警告: devauth RPM 下载失败"
+
+      - name: Download sensors RPM
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "sensors-fedora" \
+            --pattern "*.rpm" \
+            --repo "${{ github.repository }}" \
+            --dir bundle-fedora/ \
+            --clobber || echo "警告: sensors RPM 下载失败"
+
+      - name: Validate bundle
+        run: |
+          COUNT=$(ls bundle-fedora/*.rpm 2>/dev/null | wc -l)
+          echo "Bundle contains $COUNT RPMs:"
+          ls -la bundle-fedora/
+          if [ "$COUNT" -lt 3 ]; then
+            echo "警告: RPM 包数量不足 (需要 >=3, 实际 $COUNT)"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-bundle-fedora
+          path: bundle-fedora/*.rpm
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Create bundle release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "kernel-bundle-fedora-${{ github.event.inputs.channel || 'mainline' }}-${{ github.event.inputs.kernel_version || '7.1' }}"
+          name: "Kernel Bundle Fedora ${{ github.event.inputs.channel || 'mainline' }} ${{ github.event.inputs.kernel_version || '7.1' }}"
+          body: |
+            **Fedora RPM 内核 Bundle**
+
+            | 项目 | 详情 |
+            |------|------|
+            | 内核版本 | ${{ github.event.inputs.kernel_version || '7.1' }} |
+            | 通道 | ${{ github.event.inputs.channel || 'mainline' }} |
+            | 包含组件 | linux-xiaomi-sheng, firmware, alsa, devauth, sensors |
+
+            ### 安装方法
+            ```bash
+            sudo rpm -ivh *.rpm
+            ```
+          files: bundle-fedora/*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

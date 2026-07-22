@@ -720,6 +720,43 @@ build_sheng_bootimg() {
 }
 
 # ---------------------------------------------------------------------------
+# inject_rpm_packages  — 将 .rpm 包安装到 chroot
+#   参数: <rootdir> [rpm_pattern]
+#   默认 rpm_pattern: ./rpm-output/*.rpm
+#   返回: 0 成功，1 未找到 .rpm
+# ---------------------------------------------------------------------------
+inject_rpm_packages() {
+    local rootdir="$1" pattern="${2:-./rpm-output/*.rpm}"
+    local rpm_files=( $pattern )
+    if [ ${#rpm_files[@]} -eq 0 ] || [ ! -f "${rpm_files[0]}" ]; then
+        echo "警告: 未找到 .rpm 包 (pattern: $pattern)，跳过 RPM 注入" >&2
+        return 1
+    fi
+
+    cp "${rpm_files[@]}" "$rootdir/tmp/"
+
+    local rpm_list=""
+    for pkg in "${rpm_files[@]}"; do
+        rpm_list="$rpm_list /tmp/$(basename "$pkg")"
+    done
+
+    chroot "$rootdir" rpm -ivh --nodeps $rpm_list 2>/dev/null || {
+        chroot "$rootdir" rpm -Uvh --nodeps --force $rpm_list 2>/dev/null || {
+            echo "警告: 部分 RPM 安装失败，跳过" >&2
+        }
+    }
+
+    chroot "$rootdir" rm -f /tmp/*.rpm
+
+    local mod_dir
+    mod_dir=$(detect_kernel_module_dir "$rootdir")
+    if [ -n "$mod_dir" ]; then
+        echo "  detected kernel module dir: $mod_dir"
+        chroot "$rootdir" depmod -a "$mod_dir" 2>/dev/null || true
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # extract_oci_rootfs  — 从 OCI 容器 tar 提取根文件系统
 #   参数: <oci_tar_path> <target_dir>
 #   支持: 单层和多层 OCI 镜像 (application/vnd.oci.image.layer.v1.tar+gzip)

@@ -93,35 +93,28 @@ for DE in "${DESKTOPS[@]}"; do
             chroot "$ROOTDIR" dnf -y install gdm
         fi
 
-        # Step 5: Kernel injection
-        echo "正在扫描并注入本地内核与系统固件包..."
-        if inject_deb_kernel "$ROOTDIR"; then
-            KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
-            if [ -n "$KERNEL_MODULE_DIR" ]; then
-                echo "   动态识别到真实内核版本目录: $KERNEL_MODULE_DIR"
-                chroot "$ROOTDIR" /usr/sbin/depmod -a "$KERNEL_MODULE_DIR" || true
-
-                echo "   正在安装 dracut 并生成初始内存盘..."
-                chroot "$ROOTDIR" dnf -y install dracut
-                chroot "$ROOTDIR" dracut -N --kver "$KERNEL_MODULE_DIR" --force "/boot/initramfs-${KERNEL_MODULE_DIR}.img"
-
-                if [ -f "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
-                    echo "   正在适配 Bootloader 内核命名..."
-                    cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/Image"
-                    cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/vmlinuz-linux"
-                fi
-            fi
+        # Step 5: Kernel + firmware injection
+        echo "正在注入内核与系统固件包..."
+        if ls rpm-output/*.rpm &>/dev/null 2>&1; then
+            echo "  -> 使用 RPM 包注入"
+            inject_rpm_packages "$ROOTDIR"
+        elif inject_deb_kernel "$ROOTDIR"; then
+            echo "  -> 使用 DEB 包注入 (fallback)"
         else
-            echo "错误: 当前目录下未找到任何 .deb 内核包，无法生成可启动 rootfs！" >&2
+            echo "错误: 未找到 .rpm 或 .deb 内核包！" >&2
             exit 1
         fi
 
-        # tar.gz firmware injection (if present)
-        tar_files=( *.tar.gz )
-        if [ ${#tar_files[@]} -gt 0 ] && [ -f "${tar_files[0]}" ]; then
-            for tarball in "${tar_files[@]}"; do
-                tar -xz --keep-directory-symlink -f "$tarball" -C "$ROOTDIR/"
-            done
+        KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
+        if [ -n "$KERNEL_MODULE_DIR" ]; then
+            echo "   内核版本: $KERNEL_MODULE_DIR"
+            chroot "$ROOTDIR" dnf -y install dracut
+            chroot "$ROOTDIR" dracut -N --kver "$KERNEL_MODULE_DIR" --force "/boot/initramfs-${KERNEL_MODULE_DIR}.img"
+
+            if [ -f "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
+                cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/Image"
+                cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/vmlinuz-linux"
+            fi
         fi
 
         # Step 6: Users & hostname — 使用公共库

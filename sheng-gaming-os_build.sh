@@ -115,34 +115,31 @@ chroot "$ROOTDIR" dnf -y install --exclude=kernel-core \
     xdg-user-dirs dbus-x11 yad
 
 # ===========================================================================
-# Step 4: 内核注入
+# Step 4: 内核 + 固件注入
 # ===========================================================================
 echo ""
-echo "步骤 4/8: 内核注入..."
-if inject_deb_kernel "$ROOTDIR"; then
-    KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
-    if [ -n "$KERNEL_MODULE_DIR" ]; then
-        echo "   内核版本: $KERNEL_MODULE_DIR"
-        chroot "$ROOTDIR" dnf -y install dracut
-        chroot "$ROOTDIR" dracut -N --kver "$KERNEL_MODULE_DIR" --force \
-            "/boot/initramfs-${KERNEL_MODULE_DIR}.img"
-
-        if [ -f "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
-            cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/Image"
-            cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/vmlinuz-linux"
-        fi
-    fi
+echo "步骤 4/8: 内核 + 固件注入..."
+if ls rpm-output/*.rpm &>/dev/null 2>&1; then
+    echo "  -> 使用 RPM 包注入"
+    inject_rpm_packages "$ROOTDIR"
+elif inject_deb_kernel "$ROOTDIR"; then
+    echo "  -> 使用 DEB 包注入 (fallback)"
 else
-    echo "错误: 未找到 .deb 内核包，无法生成可启动系统" >&2
+    echo "错误: 未找到 .rpm 或 .deb 内核包！" >&2
     exit 1
 fi
 
-# 注入固件 tarball
-tar_files=( *.tar.gz )
-if [ ${#tar_files[@]} -gt 0 ] && [ -f "${tar_files[0]}" ]; then
-    for tarball in "${tar_files[@]}"; do
-        tar -xz --keep-directory-symlink -f "$tarball" -C "$ROOTDIR/"
-    done
+KERNEL_MODULE_DIR=$(detect_kernel_module_dir "$ROOTDIR")
+if [ -n "$KERNEL_MODULE_DIR" ]; then
+    echo "   内核版本: $KERNEL_MODULE_DIR"
+    chroot "$ROOTDIR" dnf -y install dracut
+    chroot "$ROOTDIR" dracut -N --kver "$KERNEL_MODULE_DIR" --force \
+        "/boot/initramfs-${KERNEL_MODULE_DIR}.img"
+
+    if [ -f "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" ]; then
+        cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/Image"
+        cp "$ROOTDIR/boot/vmlinuz-$KERNEL_MODULE_DIR" "$ROOTDIR/boot/vmlinuz-linux"
+    fi
 fi
 
 # ===========================================================================

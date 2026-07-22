@@ -7,12 +7,6 @@ on:
         description: '内核版本'
         required: true
         default: '7.1'
-      kernel_channel:
-        description: '内核通道'
-        required: true
-        type: choice
-        options: [mainline, stable]
-        default: 'mainline'
       launcher:
         description: '游戏启动器'
         required: true
@@ -24,7 +18,7 @@ on:
         required: true
         type: choice
         options: [sd, image]
-        default: 'sd'
+        default: 'image'
       skip_release:
         description: '跳过创建 GitHub Release'
         type: boolean
@@ -79,19 +73,17 @@ jobs:
       - name: 下载内核 Bundle
         run: |
           KERNEL_VER="${{ inputs.kernel_version || '7.1' }}"
-          KERNEL_CHANNEL="${{ inputs.kernel_channel || 'mainline' }}"
 
-          echo "下载内核 Bundle: channel=${KERNEL_CHANNEL} version=${KERNEL_VER}"
+          echo "下载内核 Bundle: version=${KERNEL_VER}"
 
-          # 尝试通道前缀 tag，回退到纯版本 tag
-          BUNDLE_TAG="kernel-bundle-${KERNEL_CHANNEL}-${KERNEL_VER}"
+          BUNDLE_TAG="kernel-bundle-latest"
           if ! gh release view "$BUNDLE_TAG" \
               --repo "${{ github.repository }}" > /dev/null 2>&1; then
             BUNDLE_TAG="kernel-bundle-${KERNEL_VER}"
             if ! gh release view "$BUNDLE_TAG" \
                 --repo "${{ github.repository }}" > /dev/null 2>&1; then
               echo "错误: 内核 Bundle 发布不存在！" >&2
-              echo "尝试过的 tags: $BUNDLE_TAG, kernel-bundle-${KERNEL_CHANNEL}-${KERNEL_VER}" >&2
+              echo "尝试过的 tags: $BUNDLE_TAG" >&2
               echo "请先通过 'Build Kernel' + 'Build Kernel Bundle' workflow 构建内核。" >&2
               exit 1
             fi

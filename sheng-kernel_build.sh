@@ -4,15 +4,10 @@ set -euo pipefail
 # =============================================================================
 # sheng-kernel_build.sh — Unified kernel build script for Xiaomi Pad 6S Pro
 # =============================================================================
-source "$(dirname "$0")/lib/rootfs-common.sh"
-# Controls which kernel branch to build via environment variables:
-#   KERNEL_REPO  — GitHub repo (default: code002-2/sm8550-mainline)
-#   KERNEL_BRANCH — Git branch (default: sheng-mainline)
-#
-# Usage:
-#   bash sheng-kernel_build.sh                    # mainline (default)
-#   KERNEL_REPO=ianchb/sm8550-mainline KERNEL_BRANCH=sheng-7.0.12 bash sheng-kernel_build.sh  # stable
+# Always builds from https://github.com/ianchb/sm8550-mainline (latest branch)
 # =============================================================================
+
+source "$(dirname "$0")/lib/rootfs-common.sh"
 
 # --- ccache configuration ---
 if [ -z "${CCACHE_DIR:-}" ]; then
@@ -32,31 +27,28 @@ export OBJDUMP="llvm-objdump"
 export READELF="llvm-readelf"
 export STRIP="llvm-strip"
 
-# --- Kernel repo and branch ---
-# Channel controls which kernel source to use (mainline or stable).
-# These can be overridden via KERNEL_REPO / KERNEL_BRANCH env vars.
-CHANNEL="${KERNEL_CHANNEL:-mainline}"
+# --- Kernel repo ---
+KERNEL_REPO="ianchb/sm8550-mainline"
+KERNEL_REPO_URL="https://github.com/${KERNEL_REPO}.git"
 
-# Set defaults based on channel, then allow env var override
-case "$CHANNEL" in
-    stable)
-        DEFAULT_REPO="ianchb/sm8550-mainline"
-        DEFAULT_BRANCH="sheng-7.1.4"
-        ;;
-    *)
-        DEFAULT_REPO="code002-2/sm8550-mainline"
-        DEFAULT_BRANCH="sheng-mainline"
-        ;;
-esac
+echo "正在从 ${KERNEL_REPO_URL} 获取最新分支..."
 
-KERNEL_REPO="${KERNEL_REPO:-$DEFAULT_REPO}"
-KERNEL_BRANCH="${KERNEL_BRANCH:-$DEFAULT_BRANCH}"
+# Detect latest sheng-* branch by version number
+LATEST_BRANCH=$(git ls-remote --heads "$KERNEL_REPO_URL" 'refs/heads/sheng-*' 2>/dev/null | \
+    sed 's|.*refs/heads/||' | \
+    sort -t. -k1,1 -k2,2n -k3,3n | \
+    tail -1)
 
-echo "Building kernel from https://github.com/${KERNEL_REPO}.git (branch: ${KERNEL_BRANCH})"
+if [ -z "$LATEST_BRANCH" ]; then
+    echo "错误: 未找到 sheng-* 分支" >&2
+    exit 1
+fi
+
+echo "  最新分支: ${LATEST_BRANCH}"
 
 # --- Clone kernel source ---
 rm -rf linux
-git clone "https://github.com/${KERNEL_REPO}.git" --branch "$KERNEL_BRANCH" --depth 1 --single-branch linux
+git clone "$KERNEL_REPO_URL" --branch "$LATEST_BRANCH" --depth 1 --single-branch linux
 cd linux
 
 # --- Copy kernel config ---

@@ -15,16 +15,6 @@ on:
         description: 'Default kernel version'
         required: true
         type: string
-      kernel_channel_default:
-        description: 'Default kernel channel (mainline/stable)'
-        required: false
-        type: string
-        default: 'mainline'
-      kernel_channel:
-        description: 'Kernel channel from user input (overrides default)'
-        required: false
-        type: string
-        default: ''
       desktop_env:
         description: 'Desktop environment from user input (overrides matrix default)'
         required: false
@@ -97,18 +87,16 @@ jobs:
       - name: Download kernel bundle
         run: |
           KERNEL_VER="${{ inputs.kernel_version_default }}"
-          KERNEL_CHANNEL="${{ inputs.kernel_channel || inputs.kernel_channel_default }}"
-          echo "Downloading kernel bundle for channel=${KERNEL_CHANNEL} version=${KERNEL_VER}"
+          echo "Downloading kernel bundle version=${KERNEL_VER}"
 
-          # Try channel-prefixed tag first, fall back to version-only tag
-          BUNDLE_TAG="kernel-bundle-${KERNEL_CHANNEL}-${KERNEL_VER}"
+          BUNDLE_TAG="kernel-bundle-latest"
           if ! gh release view "$BUNDLE_TAG" \
               --repo "${{ github.repository }}" > /dev/null 2>&1; then
             BUNDLE_TAG="kernel-bundle-${KERNEL_VER}"
             if ! gh release view "$BUNDLE_TAG" \
                 --repo "${{ github.repository }}" > /dev/null 2>&1; then
               echo "错误: 内核 Bundle 发布不存在！" >&2
-              echo "尝试过的 tags: $BUNDLE_TAG, kernel-bundle-${KERNEL_CHANNEL}-${KERNEL_VER}" >&2
+              echo "尝试过的 tags: $BUNDLE_TAG" >&2
               echo "请先通过 'Build Kernel' + 'Build Kernel Bundle' workflow 构建内核。" >&2
               exit 1
             fi
@@ -123,11 +111,10 @@ jobs:
         id: build
         run: |
           KERNEL_VER="${{ inputs.kernel_version_default }}"
-          KERNEL_CHANNEL="${{ inputs.kernel_channel || inputs.kernel_channel_default }}"
           BOOT_MODE="${{ inputs.boot_mode || 'all' }}"
           DESKTOP_ENV="${{ inputs.desktop_env || 'all' }}"
           chmod +x ${{ inputs.script }}
-          sudo KERNEL_CHANNEL="$KERNEL_CHANNEL" bash ${{ inputs.script }} ${{ inputs.distro }} "$KERNEL_VER" \
+          sudo bash ${{ inputs.script }} ${{ inputs.distro }} "$KERNEL_VER" \
             "$BOOT_MODE" "$DESKTOP_ENV"
           echo "pkg_count=$(ls -1 *.7z 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
 
@@ -159,7 +146,6 @@ jobs:
             |------|------|
             | 发行版 | ${{ inputs.release_tag_prefix }} |
             | 内核版本 | ${{ inputs.kernel_version_default }} |
-            | 内核通道 | ${{ inputs.kernel_channel || inputs.kernel_channel_default }} |
             | 构建SHA | [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |
             | 桌面环境 | ${{ inputs.desktop_matrix }} |
             | 启动模式 | ${{ inputs.boot_matrix }} |

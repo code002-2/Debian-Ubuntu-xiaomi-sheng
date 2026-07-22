@@ -7,20 +7,9 @@ on:
       - completed
     branches: [main, master]
   workflow_dispatch:
-    inputs:
-      kernel_version:
-        description: "Kernel version"
-        required: true
-        default: "7.1"
-      channel:
-        description: "Kernel channel (mainline or stable)"
-        required: true
-        type: choice
-        options: [mainline, stable]
-        default: "mainline"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.inputs.channel || 'mainline' }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -28,55 +17,60 @@ permissions:
 
 jobs:
   bundle:
-    # Only run when the triggering workflow completed successfully
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04-arm
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download all source releases
+    - name: 下载内核包
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        KERNEL_VER="${{ github.event.inputs.kernel_version || '7.1' }}"
-        CHANNEL="${{ github.event.inputs.channel || 'mainline' }}"
-
         mkdir bundle && cd bundle
 
-        echo "Download kernel packages"
-        gh release download "kernel-${CHANNEL}-${KERNEL_VER}" \
-          --pattern "*.deb" \
-          --repo "${{ github.repository }}" \
-          --clobber || { echo "Error: Failed to download kernel packages" >&2; exit 1; }
+        echo "下载内核包 (latest release)..."
+        gh release download --repo "${{ github.repository }}" \
+          --pattern "linux-*.deb" \
+          --clobber || { echo "错误: 下载内核包失败" >&2; exit 1; }
 
-        echo "Download sheng_devauth"
+        echo "下载 devauth..."
         gh release download "sheng_devauth" \
           --pattern "*.deb" \
           --repo "${{ github.repository }}" \
-          --clobber || { echo "Error: Failed to download sheng_devauth" >&2; exit 1; }
+          --clobber || { echo "错误: 下载 devauth 失败" >&2; exit 1; }
 
-        echo "Download sensor packages"
+        echo "下载 sensors..."
         gh release download "sensors" \
           --pattern "*.deb" \
           --repo "${{ github.repository }}" \
-          --clobber || { echo "Error: Failed to download sensors" >&2; exit 1; }
+          --clobber || { echo "错误: 下载 sensors 失败" >&2; exit 1; }
 
-        echo "Final bundle:"
-        ls -lah
+        echo "下载 alsa..."
+        gh release download "alsa" \
+          --pattern "*.deb" \
+          --repo "${{ github.repository }}" \
+          --clobber || { echo "错误: 下载 alsa 失败" >&2; exit 1; }
 
         COUNT=$(ls *.deb 2>/dev/null | wc -l)
-        if [ "$COUNT" -lt 5 ]; then
-          echo "Not enough packages (found $COUNT, need >= 5)"
+        echo "Bundle validated: $COUNT packages"
+        if [ "$COUNT" -lt 3 ]; then
+          echo "包数量不足 (需要 >=3, 实际 $COUNT)"
           exit 1
         fi
-        echo "Bundle validated: $COUNT packages"
 
-    - name: Create bundle release
+    - name: 创建 Bundle Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "kernel-bundle-${{ github.event.inputs.channel || 'mainline' }}-${{ github.event.inputs.kernel_version || '7.1' }}"
-        name: "Kernel Bundle ${{ github.event.inputs.channel || 'mainline' }} ${{ github.event.inputs.kernel_version || '7.1' }}"
+        tag_name: kernel-bundle-latest
+        name: "Kernel Bundle (ianchb/sm8550-mainline)"
+        body: |
+          **小米Pad6spro 内核 Bundle**
+
+          | 项目 | 详情 |
+          |------|------|
+          | 源码 | [ianchb/sm8550-mainline](https://github.com/ianchb/sm8550-mainline) |
+          | 包含 | linux-xiaomi-sheng, firmware, alsa, devauth, sensors |
         files: bundle/*.deb
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

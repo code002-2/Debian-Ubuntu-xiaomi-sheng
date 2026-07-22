@@ -7,12 +7,6 @@ on:
         description: '内核版本'
         required: true
         default: '7.0'
-      kernel_channel:
-        description: '内核通道'
-        required: true
-        type: choice
-        options: [mainline, stable]
-        default: 'mainline'
       desktop_env:
         description: '桌面环境'
         required: true
@@ -51,8 +45,6 @@ jobs:
       distro: fedora
       script: sheng-fedora-rootfs_build.sh
       kernel_version_default: '7.0'
-      kernel_channel_default: 'mainline'
-      kernel_channel: ${{ github.event.inputs.kernel_channel }}
       desktop_env: ${{ github.event.inputs.desktop_env }}
       boot_mode: ${{ github.event.inputs.boot_mode }}
       desktop_matrix: '["all"]'

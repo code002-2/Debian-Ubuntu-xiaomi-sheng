@@ -2,25 +2,15 @@ name: Build Kernel
 
 on:
   workflow_dispatch:
-    inputs:
-      kernel_version:
-        description: "内核版本号 (如: 7.1)"
-        required: true
-        default: "7.1"
-      channel:
-        description: "构建通道"
-        required: true
-        type: choice
-        options: [mainline, stable]
-        default: "mainline"
   push:
     branches: [main, master]
     paths:
       - 'sheng-kernel_build.sh'
       - '.github/workflows/kernel.yml'
+      - 'sm8550.config'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.channel || 'mainline' }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -28,29 +18,23 @@ permissions:
 
 jobs:
   build:
-    name: "构建内核 ${{ inputs.channel }} v${{ inputs.kernel_version }}"
+    name: "构建内核 (ianchb/sm8550-mainline)"
     runs-on: ubuntu-24.04-arm
-
-    env:
-      KERNEL_REPO: ${{ inputs.channel == 'stable' && 'ianchb/sm8550-mainline' || 'code002-2/sm8550-mainline' }}
-      KERNEL_BRANCH: ${{ inputs.channel == 'stable' && 'sheng-7.0.12' || 'sheng-mainline' }}
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: 设置 ccache 编译缓存
         uses: actions/cache@v4
         id: cache-ccache
         with:
           path: /home/runner/.ccache
-          key: ${{ runner.os }}-ccache-${{ inputs.channel }}-${{ inputs.kernel_version }}-${{ hashFiles('sm8550.config') }}
+          key: ${{ runner.os }}-ccache-${{ hashFiles('sm8550.config') }}
           restore-keys: |
-            ${{ runner.os }}-ccache-${{ inputs.channel }}-${{ inputs.kernel_version }}-
-            ${{ runner.os }}-ccache-${{ inputs.channel }}-
+            ${{ runner.os }}-ccache-
 
       - name: 部署 LLVM 交叉编译环境
         run: |
@@ -68,22 +52,19 @@ jobs:
           export CCACHE_MAXSIZE=10G
           export PATH="/usr/lib/ccache:$PATH"
           chmod +x sheng-kernel_build.sh
-          export KERNEL_CHANNEL="${{ inputs.channel }}"
           bash sheng-kernel_build.sh
-          echo "Kernel compilation complete"
           ccache --show-stats || true
 
-      - name: 收集编译产物
-        id: collect_artifacts
+      - name: 获取内核版本
+        id: version
         run: |
-          PKG_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
-          echo "Found $PKG_COUNT Debian package(s)"
-          echo "pkg_count=$PKG_COUNT" >> $GITHUB_OUTPUT
+          KVER=$(ls linux-xiaomi-sheng/usr/lib/modules/ 2>/dev/null | head -1 || echo "unknown")
+          echo "kernel_version=$KVER" >> $GITHUB_OUTPUT
 
       - name: 上传 .deb 驱动包
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ inputs.channel }}-${{ inputs.kernel_version }}-debs
+          name: kernel-debs
           path: "*.deb"
           retention-days: 7
           if-no-files-found: error
@@ -91,7 +72,7 @@ jobs:
       - name: 上传 EFI 引导镜像
         uses: actions/upload-artifact@v4
         with:
-          name: efi_boot-${{ inputs.channel }}
+          name: efi-boot
           path: bootaa64.efi
           retention-days: 7
           if-no-files-found: ignore
@@ -99,7 +80,7 @@ jobs:
       - name: 上传启动镜像 (boot.img)
         uses: actions/upload-artifact@v4
         with:
-          name: boot_images-${{ inputs.channel }}
+          name: boot-images
           path: |
             boot_sheng_singleboot.img
             boot_sheng_dualboot.img
@@ -108,17 +89,17 @@ jobs:
 
       - name: 自动发布 GitHub Release
         uses: softprops/action-gh-release@v2
-        if: steps.collect_artifacts.outputs.pkg_count > 0 && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         with:
-          tag_name: kernel-${{ inputs.channel }}-${{ inputs.kernel_version }}
-          name: "Kernel ${{ inputs.channel }} v${{ inputs.kernel_version }}"
+          tag_name: kernel-${{ steps.version.outputs.kernel_version }}
+          name: "Kernel v${{ steps.version.outputs.kernel_version }}"
           body: |
-            **小米Pad6spro ${{ inputs.channel }} 内核 v${{ inputs.kernel_version }}**
+            **小米Pad6spro 内核 v${{ steps.version.outputs.kernel_version }}**
 
             | 项目 | 详情 |
             |------|------|
-            | 通道 | ${{ inputs.channel }} |
-            | 内核版本 | ${{ inputs.kernel_version }} |
+            | 源码 | [ianchb/sm8550-mainline](https://github.com/ianchb/sm8550-mainline) |
+            | 内核版本 | ${{ steps.version.outputs.kernel_version }} |
             | 架构 | ARM64 (sm8550) |
           files: |
             *.deb
